@@ -58,7 +58,7 @@ export interface ProjectileData {
   createdAt: number;
 }
 
-export type EnemyType = 'ZOMBIE' | 'DEMON' | 'BAT';
+export type EnemyType = 'ZOMBIE' | 'DEMON' | 'CROW';
 
 export interface EnemyData {
   id: string;

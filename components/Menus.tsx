@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameOptions, GameStats, PersistentData, UpgradeState } from '../types';
 import { UPGRADE_CONFIG, getUpgradeCost, CHARACTERS } from '../constants';
 
@@ -60,12 +60,21 @@ const ZombieSilhouette = () => (
 // --- Main Components ---
 
 export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, onUpgrade }) => {
-  const [view, setView] = useState<'MAIN' | 'SHOP' | 'CHAR_SELECT'>('MAIN');
+  const [view, setView] = useState<'MAIN' | 'SHOP' | 'CHAR_SELECT' | 'CREDITS'>('MAIN');
   const [options, setOptions] = useState<GameOptions>({
     unlimitedCash: false,
     soundEnabled: true,
     characterId: 'TOM'
   });
+
+  useEffect(() => {
+    if (view === 'CREDITS') {
+        const timer = setTimeout(() => {
+            setView('MAIN');
+        }, 10000);
+        return () => clearTimeout(timer);
+    }
+  }, [view]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -205,6 +214,49 @@ export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, o
       </div>
   );
 
+  const CreditsUI = () => (
+      <div 
+        className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden cursor-pointer" 
+        onClick={() => setView('MAIN')}
+      >
+        <div 
+            className="flex flex-col items-center text-center space-y-12 w-full"
+            style={{ animation: 'rollCredits 10s linear forwards' }}
+        >
+             <style>{`
+                @keyframes rollCredits {
+                    0% { transform: translateY(100vh); }
+                    100% { transform: translateY(-150%); }
+                }
+            `}</style>
+            <h2 className="text-5xl font-black text-red-600 tracking-widest uppercase mb-12 drop-shadow-lg">Credits</h2>
+            
+            <div className="space-y-2">
+                <div className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] mb-1">Director \ Designer</div>
+                <div className="text-3xl text-white font-black tracking-wide">Jamie T</div>
+            </div>
+
+            <div className="space-y-2">
+                <div className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] mb-1">Code Writer</div>
+                <div className="text-3xl text-white font-black tracking-wide">Google Studio AI</div>
+            </div>
+
+            <div className="space-y-2">
+                <div className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] mb-1">Background Music</div>
+                <div className="text-3xl text-white font-black tracking-wide">nickpanek</div>
+                <div className="text-gray-600 text-xs mt-1 tracking-wider">(pixabay.com)</div>
+            </div>
+             
+             {/* Spacing to ensure it clears the screen */}
+            <div className="h-[20vh]"></div>
+        </div>
+        
+        <div className="absolute bottom-8 text-gray-700 text-[10px] uppercase tracking-widest animate-pulse font-mono">
+            Click to Skip
+        </div>
+      </div>
+  );
+
   return (
     <div className="absolute inset-0 bg-[#050505] flex flex-col items-center justify-center z-50 text-white overflow-hidden font-sans">
       
@@ -246,6 +298,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, o
           
           {view === 'SHOP' && <ShopUI />}
           {view === 'CHAR_SELECT' && <CharacterSelectUI />}
+          {view === 'CREDITS' && <CreditsUI />}
           
           {view === 'MAIN' && (
           <div className="relative bg-[#0f0f11] border border-gray-800 w-[420px] p-8 rounded-sm shadow-[0_20px_60px_rgba(0,0,0,0.9)] z-20">
@@ -292,7 +345,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, o
               </button>
             </div>
 
-            {/* Options Area - Grouped at Bottom as requested */}
+            {/* Options Area - Grouped at Bottom */}
             <div className="mt-8 pt-6 border-t border-gray-800 space-y-4 relative">
                 {/* Section Label */}
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-[#0f0f11] px-2 text-[10px] text-gray-600 uppercase tracking-widest font-bold">
@@ -310,16 +363,14 @@ export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, o
                      </div>
                 </div>
 
-                {/* Cash Checkbox */}
-                <div className="bg-[#151517] p-3 rounded-md border border-gray-800/50 flex items-center justify-between group hover:border-gray-700 transition-colors">
-                     <span className="font-bold text-gray-400 group-hover:text-gray-200 text-sm tracking-wide">Unlimited Cash</span>
-                     <div 
-                        className={`w-6 h-6 border-2 rounded cursor-pointer flex items-center justify-center transition-all ${options.unlimitedCash ? 'bg-green-900 border-green-600' : 'bg-transparent border-gray-600'}`}
-                        onClick={() => setOptions(o => ({ ...o, unlimitedCash: !o.unlimitedCash }))}
-                     >
-                        {options.unlimitedCash && <span className="text-green-400 text-sm font-bold">✓</span>}
-                     </div>
-                </div>
+                {/* Credits Button (Replaces Unlimited Cash) */}
+                <button 
+                    onClick={() => setView('CREDITS')}
+                    className="w-full bg-[#151517] hover:bg-[#1a1a1d] p-3 rounded-md border border-gray-800/50 flex items-center justify-center group hover:border-gray-700 transition-colors"
+                >
+                    <span className="font-bold text-gray-400 group-hover:text-white text-sm tracking-widest uppercase">Credits</span>
+                </button>
+
             </div>
             
             <div className="text-center text-[10px] text-gray-700 mt-6 font-mono uppercase tracking-widest opacity-50">

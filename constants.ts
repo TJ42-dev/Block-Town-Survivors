@@ -20,7 +20,7 @@ export const COLORS = {
   zombieSkin: "#5c7358", // Rotten green/grey
   zombieClothes: "#4b5563",
   demonSkin: "#991b1b", // Blood red
-  batSkin: "#000000",
+  crowSkin: "#0a0a0a", // Black
   healthPack: "#ef4444", // Red cross
   bone: "#a3a3a3" // Dusty bone
 };

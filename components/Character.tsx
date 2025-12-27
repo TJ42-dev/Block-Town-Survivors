@@ -36,7 +36,7 @@ import { ProjectileData, EnemyData, PowerUpData, GameStats, GameOptions, PlayerS
 import { audioManager } from '../utils/audioManager';
 
 // Pre-allocate math objects to reduce GC
-const GROUND_PLANE = new Plane(new Vector3(0, 1, 0), 0);
+const AIM_PLANE = new Plane(new Vector3(0, 1, 0), -1.25);
 const TARGET_VEC = new Vector3();
 const CAM_FORWARD = new Vector3();
 const CAM_RIGHT = new Vector3();
@@ -163,16 +163,16 @@ const Enemy: React.FC<{
       group.current.position.addScaledVector(ENEMY_DIR, moveDist);
       group.current.lookAt(playerPos.x, group.current.position.y, playerPos.z);
       
-      const newTime = animationTime + delta * (data.type === 'BAT' ? 15 : 8);
+      const newTime = animationTime + delta * (data.type === 'CROW' ? 15 : 8);
       setAnimationTime(newTime);
       
       // Animations
-      if (data.type === 'BAT') {
+      if (data.type === 'CROW') {
           // Flapping wings
           if (leftLimb.current) leftLimb.current.rotation.z = Math.sin(newTime) * 0.5;
           if (rightLimb.current) rightLimb.current.rotation.z = -Math.sin(newTime) * 0.5;
-          // Float up and down
-          group.current.position.y = 2.0 + Math.sin(newTime * 0.5) * 0.3;
+          // Float up and down - Lowered from 2.0 to 1.5 for easier shotgun hits
+          group.current.position.y = 1.5 + Math.sin(newTime * 0.5) * 0.2;
       } else {
           // Walking (Zombie/Demon)
           if (leftLimb.current) leftLimb.current.rotation.x = Math.sin(newTime) * 0.5;
@@ -191,12 +191,12 @@ const Enemy: React.FC<{
 
   const isZombie = data.type === 'ZOMBIE';
   const isDemon = data.type === 'DEMON';
-  const isBat = data.type === 'BAT';
+  const isCrow = data.type === 'CROW';
 
   return (
     <group ref={group} position={data.initialPosition}>
        {/* Health Bar */}
-       <group position={[0, isBat ? 2.8 : 2.2, 0]}>
+       <group position={[0, isCrow ? 2.4 : 2.2, 0]}>
           <mesh position={[0, 0, 0]}>
             <planeGeometry args={[1, 0.15]} />
             <meshBasicMaterial color="black" />
@@ -207,32 +207,32 @@ const Enemy: React.FC<{
           </mesh>
        </group>
 
-       {/* --- BAT MODEL --- */}
-       {isBat && (
+       {/* --- CROW MODEL --- */}
+       {isCrow && (
            <group position={[0, 0, 0]}>
                {/* Body */}
                <mesh castShadow>
                    <boxGeometry args={[0.3, 0.3, 0.3]} />
-                   <meshStandardMaterial color={COLORS.batSkin} />
+                   <meshStandardMaterial color={COLORS.crowSkin} />
                </mesh>
                 {/* Wings */}
                <group position={[-0.2, 0, 0]} ref={leftLimb}>
                     <mesh position={[-0.4, 0, 0]} castShadow>
                         <boxGeometry args={[0.8, 0.05, 0.4]} />
-                        <meshStandardMaterial color={COLORS.batSkin} />
+                        <meshStandardMaterial color={COLORS.crowSkin} />
                     </mesh>
                </group>
                <group position={[0.2, 0, 0]} ref={rightLimb}>
                     <mesh position={[0.4, 0, 0]} castShadow>
                         <boxGeometry args={[0.8, 0.05, 0.4]} />
-                        <meshStandardMaterial color={COLORS.batSkin} />
+                        <meshStandardMaterial color={COLORS.crowSkin} />
                     </mesh>
                </group>
            </group>
        )}
 
        {/* --- ZOMBIE / DEMON MODEL --- */}
-       {!isBat && (
+       {!isCrow && (
         <group position={[0, 0, 0]}>
           {/* Head */}
           <mesh position={[0, 1.45, 0]} castShadow>
@@ -464,16 +464,18 @@ const ShotgunModel: React.FC<{ muzzleRef: React.RefObject<Group | null> }> = ({ 
                 <boxGeometry args={[0.08, 0.08, 0.25]} />
                 <meshStandardMaterial color="#292524" />
             </mesh>
-            <mesh position={[0, 0.02, 0.45]} rotation={[Math.PI/2, 0, 0]} castShadow>
-                <cylinderGeometry args={[0.025, 0.025, 0.55]} />
+            {/* Shortened Barrel */}
+            <mesh position={[0, 0.02, 0.35]} rotation={[Math.PI/2, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.025, 0.025, 0.35]} />
                 <meshStandardMaterial color="#111" />
             </mesh>
-             <mesh position={[0, -0.02, 0.35]} rotation={[Math.PI/2, 0, 0]} castShadow>
+             {/* Shortened Pump */}
+             <mesh position={[0, -0.02, 0.30]} rotation={[Math.PI/2, 0, 0]} castShadow>
                 <cylinderGeometry args={[0.035, 0.035, 0.2]} />
                 <meshStandardMaterial color="#44403c" />
             </mesh>
-            <group position={[0, 0.02, 0.75]} ref={muzzleRef} />
-            <GunFlashlight position={[0, -0.045, 0.65]} />
+            <group position={[0, 0.02, 0.55]} ref={muzzleRef} />
+            <GunFlashlight position={[0, -0.045, 0.45]} />
         </group>
     )
 }
@@ -622,7 +624,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
         hp = 80;
     } 
     if (rand > 0.9 || minutes > 4) {
-        type = 'BAT';
+        type = 'CROW';
         speed = 6.0;
         hp = 30;
     }
@@ -1043,7 +1045,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
 
     // Aiming
     state.raycaster.setFromCamera(state.pointer, state.camera);
-    state.raycaster.ray.intersectPlane(GROUND_PLANE, TARGET_VEC);
+    state.raycaster.ray.intersectPlane(AIM_PLANE, TARGET_VEC);
     aimTarget.current.copy(TARGET_VEC);
     const lookTargetX = TARGET_VEC.x;
     const lookTargetZ = TARGET_VEC.z;
