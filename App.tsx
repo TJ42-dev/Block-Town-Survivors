@@ -50,7 +50,10 @@ const App: React.FC = () => {
     setGameState('PLAYING');
     setIsPaused(false);
     setGameKey(prev => prev + 1);
-    
+
+    // Set audio mute state based on user preference
+    audioManager.setMute(!options.soundEnabled);
+
     // Start Audio
     audioManager.playBGM(SOUND_PATHS.BGM);
   };
@@ -72,6 +75,10 @@ const App: React.FC = () => {
     setGameState('PLAYING');
     setIsPaused(false);
     setGameKey(prev => prev + 1); // Force full remount
+
+    // Set audio mute state based on user preference
+    audioManager.setMute(!gameOptions.soundEnabled);
+
     // Ensure audio continues or restarts
     audioManager.playBGM(SOUND_PATHS.BGM);
   };

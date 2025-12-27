@@ -20,15 +20,21 @@ export class AudioManager {
       return this.context;
     }
   
-    async load(url: string) {
+    async load(url: string): Promise<boolean> {
       const ctx = this.getContext();
-      if (this.buffers[url]) return;
+      if (this.buffers[url]) return true;
       try {
           const res = await fetch(url);
+          if (!res.ok) {
+              console.warn('Failed to fetch sound', url, res.status);
+              return false;
+          }
           const arrayBuffer = await res.arrayBuffer();
           this.buffers[url] = await ctx.decodeAudioData(arrayBuffer);
+          return true;
       } catch (e) {
           console.warn('Failed to load sound', url, e);
+          return false;
       }
     }
   
@@ -58,14 +64,17 @@ export class AudioManager {
   
     playBGM(url: string) {
       if (this.bgmSource) return; // Already playing?
-      
+
       const ctx = this.getContext();
       if (ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
       }
 
       if (!this.buffers[url]) {
-          this.load(url).then(() => this.startBGMNode(url));
+          // Load and then play - wait for it to complete
+          this.load(url).then((success) => {
+              if (success) this.startBGMNode(url);
+          });
           return;
       }
       this.startBGMNode(url);
