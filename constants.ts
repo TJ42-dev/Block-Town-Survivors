@@ -26,15 +26,17 @@ export const COLORS = {
 };
 
 // --- Audio Paths ---
+// Use Vite's base URL for proper path resolution on GitHub Pages
+const BASE = import.meta.env.BASE_URL || '/';
 export const SOUND_PATHS = {
-  BGM: '/sounds/bgm1.mp3',
-  SHOOT: '/sounds/pistol_fire.wav',
-  SHOTGUN: '/sounds/shotgun_fire.wav',
-  HIT: '/sounds/enemy_hit.wav',
-  DEAD: '/sounds/enemy_dead.wav',
-  PLAYER_HIT_1: '/sounds/player_hit1.wav',
-  PLAYER_HIT_2: '/sounds/player_hit2.wav',
-  PLAYER_HIT_3: '/sounds/player_hit3.wav'
+  BGM: `${BASE}sounds/bgm1.mp3`,
+  SHOOT: `${BASE}sounds/pistol_fire.wav`,
+  SHOTGUN: `${BASE}sounds/shotgun_fire.wav`,
+  HIT: `${BASE}sounds/enemy_hit.wav`,
+  DEAD: `${BASE}sounds/enemy_dead.wav`,
+  PLAYER_HIT_1: `${BASE}sounds/player_hit1.wav`,
+  PLAYER_HIT_2: `${BASE}sounds/player_hit2.wav`,
+  PLAYER_HIT_3: `${BASE}sounds/player_hit3.wav`
 };
 
 // --- Player Stats ---
