@@ -24,6 +24,12 @@
 3. Set Branch: `gh-pages` / `/ (root)`
 4. Save
 
+### Changing Deploy Branch
+Edit `.github/workflows/deploy.yml` line 5:
+```yaml
+branches: ['main', 'master']  # Add or remove branches here
+```
+
 ### Manual Deployment
 ```bash
 npm install
