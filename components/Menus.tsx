@@ -244,6 +244,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({ onStart, persistentData, o
             <div className="space-y-2">
                 <div className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] mb-1">Background Music</div>
                 <div className="text-3xl text-white font-black tracking-wide">nickpanek</div>
+                <div className="text-3xl text-white font-black tracking-wide">LiteSaturation</div>
                 <div className="text-gray-600 text-xs mt-1 tracking-wider">(pixabay.com)</div>
             </div>
              

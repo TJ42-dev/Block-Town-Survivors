@@ -5,6 +5,7 @@ export const MOVEMENT_SPEED = 5;
 export const ROTATION_SPEED = 10;
 export const CAMERA_OFFSET = [10, 10, 10]; // Isometric-ish offset
 export const CAMERA_ZOOM = 20;
+export const GRAVITY = 25; // Physics gravity
 
 export const COLORS = {
   grass: "#262626", // Slightly lighter dirt/dead grass
@@ -22,20 +23,29 @@ export const COLORS = {
   demonSkin: "#991b1b", // Blood red
   crowSkin: "#0a0a0a", // Black
   healthPack: "#ef4444", // Red cross
-  bone: "#a3a3a3" // Dusty bone
+  bone: "#a3a3a3", // Dusty bone
+  explosion: "#ef4444" // Explosion red
 };
 
 // --- Audio Paths ---
 export const SOUND_PATHS = {
-  BGM: '/sounds/bgm1.mp3',
+  // BGM is now handled via BGM_TRACKS array
   SHOOT: '/sounds/pistol_fire.wav',
   SHOTGUN: '/sounds/shotgun_fire.wav',
+  EXPLOSION: '/sounds/shotgun_fire.wav', // Fallback
   HIT: '/sounds/enemy_hit.wav',
   DEAD: '/sounds/enemy_dead.wav',
   PLAYER_HIT_1: '/sounds/player_hit1.wav',
   PLAYER_HIT_2: '/sounds/player_hit2.wav',
-  PLAYER_HIT_3: '/sounds/player_hit3.wav'
+  PLAYER_HIT_3: '/sounds/player_hit3.wav',
+  MGL_FIRE: '/sounds/mgl_fire.wav',
+  MGL_HIT: '/sounds/mgl_hit.wav'
 };
+
+export const BGM_TRACKS = [
+  '/sounds/bgm/bgm1.mp3',
+  '/sounds/bgm/bgm2.mp3'
+];
 
 // --- Player Stats ---
 export const MAX_HEALTH = 100;
@@ -58,6 +68,8 @@ export const WEAPONS: Record<string, WeaponStats> = {
     pelletCount: 1,
     spread: 0,
     automatic: false,
+    explosive: false,
+    arcing: false,
     holdConfig: {
       twoHanded: false,
       rightArm: { x: -Math.PI / 2, y: -Math.PI / 12, z: 0 },
@@ -83,6 +95,8 @@ export const WEAPONS: Record<string, WeaponStats> = {
     pelletCount: 1,
     spread: 0.1, // Slight spray
     automatic: true,
+    explosive: false,
+    arcing: false,
     holdConfig: {
       twoHanded: false,
       rightArm: { x: -Math.PI / 2, y: -Math.PI / 10, z: 0 },
@@ -108,6 +122,8 @@ export const WEAPONS: Record<string, WeaponStats> = {
     pelletCount: 5,
     spread: 0.3,
     automatic: false,
+    explosive: false,
+    arcing: false,
     holdConfig: {
       twoHanded: true,
       rightArm: { x: -Math.PI / 2, y: -Math.PI / 6, z: 0 },
@@ -118,6 +134,34 @@ export const WEAPONS: Record<string, WeaponStats> = {
         pos: [0, -0.05, 0.1],
         rot: [-Math.PI/0.60, 0, 0],
         scale: [1.2, 1.2, 1.2]
+      }
+    }
+  },
+  GRENADE_LAUNCHER: {
+    name: "Thumper MGL",
+    stance: "TWO_HANDED",
+    maxAmmo: 6,
+    damage: 80, 
+    fireRate: 800,
+    reloadTime: 2500,
+    projectileSpeed: 14, // Speed affects trajectory arc
+    color: "#222",
+    pelletCount: 1,
+    spread: 0,
+    automatic: false,
+    explosive: true,
+    explosionRadius: 3.5,
+    arcing: true,
+    holdConfig: {
+      twoHanded: true,
+      rightArm: { x: -Math.PI / 2, y: -Math.PI / 6, z: 0 },
+      rightForearm: { x: Math.PI / 6, y: 0, z: 0 },
+      leftArm: { x: -Math.PI / 2, y: Math.PI / 3, z: 0 },
+      leftForearm: { x: Math.PI / 12, y: 0, z: 0 },
+      model: {
+        pos: [0, -0.05, 0.1],
+        rot: [-Math.PI/0.60, 0, 0],
+        scale: [1.1, 1.1, 1.1]
       }
     }
   }
@@ -139,6 +183,11 @@ export const WEAPON_LEVEL_STATS: Record<string, { maxAmmo: number, damage: numbe
         { maxAmmo: 6, damage: 22, reloadTime: 2200 },
         { maxAmmo: 10, damage: 32, reloadTime: 1900 },
         { maxAmmo: 16, damage: 45, reloadTime: 1500 }
+    ],
+    GRENADE_LAUNCHER: [
+        { maxAmmo: 6, damage: 80, reloadTime: 2500 },
+        { maxAmmo: 6, damage: 110, reloadTime: 2200 },
+        { maxAmmo: 12, damage: 150, reloadTime: 1800 }
     ]
 };
 
@@ -183,6 +232,19 @@ export const CHARACTERS: Record<string, CharacterConfig> = {
         hairStyle: 'BOB',
         hairColor: '#0a0a0a'
     }
+  },
+  SEAN: {
+    id: 'SEAN',
+    name: 'Sean Boxery',
+    description: 'If it moves, blow it up.',
+    weapon: 'GRENADE_LAUNCHER',
+    weaponName: 'Thumper MGL',
+    model: {
+        skin: "#d4a373", // Tanned
+        shirt: "#166534", // Green Tactical
+        pants: "#422006", // Brown Camo
+        accessory: 'NONE' // Maybe change to sunglasses later?
+    }
   }
 };
 
@@ -200,6 +262,7 @@ export const BONE_RADIUS = 0.5;
 export const BONE_EXP_VALUE = 20;
 export const BASE_EXP_REQ = 100;
 export const EXP_EXPONENT = 1.2; 
+export const MAGNET_RADIUS = 3.5;
 
 export const PERKS: PerkOption[] = [
   { id: 'p1', type: 'HEAL', label: 'First Aid', description: 'Heal 50% HP', rarity: 'COMMON', value: 0.5 },

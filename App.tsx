@@ -4,7 +4,7 @@ import { Game } from './components/Game';
 import { UI } from './components/UI';
 import { StartMenu, GameOverMenu } from './components/Menus';
 import { GameOptions, GameStats, PersistentData, PlayerStats, UpgradeState } from './types';
-import { DEFAULT_SAVE_DATA, UPGRADE_CONFIG, getUpgradeCost, SOUND_PATHS } from './constants';
+import { DEFAULT_SAVE_DATA, UPGRADE_CONFIG, getUpgradeCost, SOUND_PATHS, BGM_TRACKS } from './constants';
 import { audioManager } from './utils/audioManager';
 
 type GameState = 'MENU' | 'PLAYING' | 'GAME_OVER';
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [gameStats, setGameStats] = useState<GameStats | null>(null);
   const [gameKey, setGameKey] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [bgmIndex, setBgmIndex] = useState(0);
 
   // Persistent State
   const [persistentData, setPersistentData] = useState<PersistentData>(DEFAULT_SAVE_DATA);
@@ -36,7 +37,8 @@ const App: React.FC = () => {
       console.error("Failed to load save data", e);
     }
     // Preload audio
-    audioManager.load(SOUND_PATHS.BGM);
+    BGM_TRACKS.forEach(track => audioManager.load(track));
+    Object.values(SOUND_PATHS).forEach(path => audioManager.load(path));
   }, []);
 
   // Save Helper
@@ -45,14 +47,19 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
   };
 
+  const playRoundBgm = () => {
+    const track = BGM_TRACKS[bgmIndex];
+    audioManager.playBGM(track);
+    setBgmIndex((prev) => (prev + 1) % BGM_TRACKS.length);
+  };
+
   const handleStartGame = (options: GameOptions) => {
     setGameOptions(options);
     setGameState('PLAYING');
     setIsPaused(false);
     setGameKey(prev => prev + 1);
     
-    // Start Audio
-    audioManager.playBGM(SOUND_PATHS.BGM);
+    playRoundBgm();
   };
 
   const handleGameOver = (stats: GameStats) => {
@@ -72,8 +79,8 @@ const App: React.FC = () => {
     setGameState('PLAYING');
     setIsPaused(false);
     setGameKey(prev => prev + 1); // Force full remount
-    // Ensure audio continues or restarts
-    audioManager.playBGM(SOUND_PATHS.BGM);
+    
+    playRoundBgm();
   };
 
   const handleQuit = () => {

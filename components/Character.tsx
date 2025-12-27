@@ -30,7 +30,9 @@ import {
   BONE_EXP_VALUE,
   BASE_EXP_REQ,
   EXP_EXPONENT,
-  PERKS
+  PERKS,
+  GRAVITY,
+  MAGNET_RADIUS
 } from '../constants';
 import { ProjectileData, EnemyData, PowerUpData, GameStats, GameOptions, PlayerStats, BoneData, PerkOption, CharacterConfig, EnemyType } from '../types';
 import { audioManager } from '../utils/audioManager';
@@ -49,17 +51,69 @@ const ENEMY_DIR = new Vector3();
 
 type EnemyPositionMap = Record<string, Vector3>;
 
+interface ExplosionData {
+    id: string;
+    position: [number, number, number];
+    radius: number;
+}
+
+const ExplosionEffect: React.FC<{ data: ExplosionData, onComplete: (id: string) => void }> = ({ data, onComplete }) => {
+    const ref = useRef<Group>(null);
+    const [scale, setScale] = useState(0.1);
+    const [opacity, setOpacity] = useState(1);
+
+    useFrame((state, delta) => {
+        if (!ref.current) return;
+        const speed = 8 * delta;
+        const newScale = scale + speed * data.radius;
+        const newOpacity = opacity - speed * 1.5;
+
+        setScale(newScale);
+        setOpacity(newOpacity);
+
+        ref.current.scale.set(newScale, newScale, newScale);
+        
+        if (newOpacity <= 0) {
+            onComplete(data.id);
+        }
+    });
+
+    return (
+        <group ref={ref} position={data.position}>
+            <mesh>
+                <sphereGeometry args={[1, 16, 16]} />
+                <meshStandardMaterial 
+                    color={COLORS.explosion} 
+                    transparent 
+                    opacity={opacity} 
+                    emissive={COLORS.explosion} 
+                    emissiveIntensity={2} 
+                />
+            </mesh>
+            <pointLight distance={data.radius * 2} intensity={5 * opacity} color="#ffaa00" />
+        </group>
+    )
+}
+
 const Bullet: React.FC<{ 
   data: ProjectileData, 
   onDelete: (id: string) => void,
   enemyPositionsRef: React.MutableRefObject<EnemyPositionMap>,
   onHitEnemy: (enemyId: string) => void,
+  onExplode: (position: Vector3, radius: number, damage: number) => void,
   isPaused: boolean
-}> = ({ data, onDelete, enemyPositionsRef, onHitEnemy, isPaused }) => {
+}> = ({ data, onDelete, enemyPositionsRef, onHitEnemy, onExplode, isPaused }) => {
   const ref = useRef<Group>(null);
+  
+  // Physics State for this bullet
+  const velocity = useRef(new Vector3(...(data.velocity || [0, 0, 0])));
   
   useFrame((state, delta) => {
     if (isPaused || !ref.current) return;
+    
+    const x = ref.current.position.x;
+    const y = ref.current.position.y;
+    const z = ref.current.position.z;
     
     // Check life
     const age = Date.now() - data.createdAt;
@@ -68,34 +122,68 @@ const Bullet: React.FC<{
       return;
     }
 
-    // Move
-    const speed = data.speed * delta;
-    ref.current.position.x += data.direction[0] * speed;
-    ref.current.position.z += data.direction[2] * speed;
-
-    // Check collision with environment
-    const x = ref.current.position.x;
-    const z = ref.current.position.z;
-
-    // Check Trees
-    for (const tree of TREES) {
-       const dx = x - tree.position[0];
-       const dz = z - tree.position[2];
-       if (dx * dx + dz * dz < 0.25) { // Simple radius check
-         onDelete(data.id);
-         return;
-       }
+    const hitEnvironment = () => {
+        if (data.isExplosive && data.explosionRadius) {
+            onExplode(ref.current!.position.clone(), data.explosionRadius, data.damage);
+        }
+        onDelete(data.id);
     }
 
-    // Check Buildings
+    // --- Movement Logic ---
+    if (data.usePhysics) {
+        // Arcing Ballistics
+        velocity.current.y -= GRAVITY * delta;
+        
+        ref.current.position.addScaledVector(velocity.current, delta);
+        
+        // Rotate to face travel direction
+        const nextPos = ref.current.position.clone().add(velocity.current);
+        ref.current.lookAt(nextPos);
+
+        // Ground Collision for Grenades
+        if (ref.current.position.y <= 0) {
+            ref.current.position.y = 0;
+            hitEnvironment();
+            return;
+        }
+
+    } else {
+        // Linear Movement
+        const speed = data.speed * delta;
+        ref.current.position.x += data.direction[0] * speed;
+        ref.current.position.z += data.direction[2] * speed;
+    }
+
+    // --- Collision Logic ---
+
+    // Check Buildings (3D collision with height check)
     for (const b of BUILDINGS) {
       const hw = b.size[0] / 2;
       const hd = b.size[2] / 2;
-      if (x > b.position[0] - hw && x < b.position[0] + hw && 
-          z > b.position[2] - hd && z < b.position[2] + hd) {
-        onDelete(data.id);
-        return;
+      const height = b.size[1];
+
+      // If arcing, we can fly over buildings
+      if (ref.current.position.x > b.position[0] - hw && ref.current.position.x < b.position[0] + hw && 
+          ref.current.position.z > b.position[2] - hd && ref.current.position.z < b.position[2] + hd) {
+          
+          if (!data.usePhysics || ref.current.position.y < height) {
+              hitEnvironment();
+              return;
+          }
       }
+    }
+
+    // Check Trees (Cylindrical collision)
+    for (const tree of TREES) {
+       const dx = ref.current.position.x - tree.position[0];
+       const dz = ref.current.position.z - tree.position[2];
+       if (dx * dx + dz * dz < 0.25) { 
+           // Trees are roughly 2 units high
+           if (!data.usePhysics || ref.current.position.y < 2) {
+                hitEnvironment();
+                return;
+           }
+       }
     }
 
     // Check Enemies
@@ -103,14 +191,22 @@ const Bullet: React.FC<{
       const enemies = enemyPositionsRef.current;
       for (const id in enemies) {
         const pos = enemies[id];
-        const dx = x - pos.x;
-        const dz = z - pos.z;
-        const hitRadius = ENEMY_RADIUS + 0.1; // Slightly larger for gameplay feel
+        const dx = ref.current.position.x - pos.x;
+        const dz = ref.current.position.z - pos.z;
+        const hitRadius = ENEMY_RADIUS + 0.2; 
         
+        // Simple cylinder check
         if (dx*dx + dz*dz < hitRadius * hitRadius) {
-          onHitEnemy(id);
-          onDelete(data.id);
-          return;
+            // Height check (Enemies are roughly 1.5 - 2 units tall)
+            if (!data.usePhysics || (ref.current.position.y < 2 && ref.current.position.y > 0)) {
+                if (data.isExplosive && data.explosionRadius) {
+                    onExplode(ref.current!.position.clone(), data.explosionRadius, data.damage);
+                } else {
+                    onHitEnemy(id);
+                }
+                onDelete(data.id);
+                return;
+            }
         }
       }
     }
@@ -119,8 +215,17 @@ const Bullet: React.FC<{
   return (
     <group ref={ref} position={data.position}>
       <mesh rotation={[0, Math.atan2(data.direction[0], data.direction[2]), 0]}>
-        <sphereGeometry args={[0.08, 4, 4]} />
-        <meshStandardMaterial color={COLORS.bullet} emissive={COLORS.bullet} emissiveIntensity={2} />
+        {data.isExplosive ? (
+             <sphereGeometry args={[0.2, 8, 8]} />
+        ) : (
+            <sphereGeometry args={[0.08, 4, 4]} />
+        )}
+        <meshStandardMaterial 
+            color={data.isExplosive ? "#111" : COLORS.bullet} 
+            emissive={data.isExplosive ? "#111" : COLORS.bullet} 
+            emissiveIntensity={data.isExplosive ? 0 : 2} 
+            roughness={0.5}
+        />
       </mesh>
     </group>
   );
@@ -341,15 +446,58 @@ const HealthPack: React.FC<{ data: PowerUpData, isPaused: boolean }> = ({ data, 
     )
 }
 
-const Bone: React.FC<{ data: BoneData, isPaused: boolean }> = ({ data, isPaused }) => {
+const Bone: React.FC<{ 
+    data: BoneData, 
+    playerRef: React.RefObject<Group | null>, 
+    bonePositionsRef: React.MutableRefObject<Record<string, Vector3>>, 
+    isPaused: boolean 
+}> = ({ data, playerRef, bonePositionsRef, isPaused }) => {
     const ref = useRef<Group>(null);
+    
+    // Initialize ref position tracking
+    useEffect(() => {
+        if (bonePositionsRef.current) {
+            bonePositionsRef.current[data.id] = new Vector3(...data.position);
+        }
+        return () => {
+            if (bonePositionsRef.current) delete bonePositionsRef.current[data.id];
+        }
+    }, [data.id, data.position, bonePositionsRef]);
+
     useFrame((state, delta) => {
-        if (!isPaused && ref.current) {
-            ref.current.rotation.y += delta * 2;
-            ref.current.rotation.z += delta;
-            ref.current.position.y = 0.3 + Math.sin(state.clock.elapsedTime * 3 + data.value) * 0.1;
+        if (isPaused || !ref.current || !playerRef.current) return;
+        
+        const playerPos = playerRef.current.position;
+        const currentPos = ref.current.position;
+        
+        // Calculate distance to player
+        const distSq = currentPos.distanceToSquared(playerPos);
+        
+        // Magnet Logic
+        if (distSq < MAGNET_RADIUS * MAGNET_RADIUS) {
+            // Move towards player
+            const dir = new Vector3().subVectors(playerPos, currentPos).normalize();
+            // Speed up as it gets closer
+            const speed = 8 + (MAGNET_RADIUS - Math.sqrt(distSq)); 
+            ref.current.position.addScaledVector(dir, speed * delta);
+            
+             // Float towards player waist height when magnetized
+            ref.current.position.y = MathUtils.lerp(ref.current.position.y, 1.0, delta * 5);
+        } else {
+             // Idle bounce
+            ref.current.position.y = 0.5 + Math.sin(state.clock.elapsedTime * 3 + data.value) * 0.1;
+        }
+
+        // Spin
+        ref.current.rotation.y += delta * 2;
+        ref.current.rotation.z += delta;
+
+        // Sync visual position to logic ref
+        if (bonePositionsRef.current[data.id]) {
+            bonePositionsRef.current[data.id].copy(ref.current.position);
         }
     });
+
     return (
         <group ref={ref} position={data.position}>
              <mesh castShadow>
@@ -480,6 +628,100 @@ const ShotgunModel: React.FC<{ muzzleRef: React.RefObject<Group | null> }> = ({ 
     )
 }
 
+const GrenadeLauncherModel: React.FC<{ muzzleRef: React.RefObject<Group | null> }> = ({ muzzleRef }) => {
+    return (
+        <group>
+            {/* Main Frame (Top strap) */}
+            <mesh position={[0, 0.08, 0.15]} castShadow>
+                <boxGeometry args={[0.08, 0.04, 0.35]} />
+                <meshStandardMaterial color="#1f1f1f" roughness={0.7} />
+            </mesh>
+            
+            {/* The Drum (Revolving cylinder) */}
+            <group position={[0, 0, 0.15]} rotation={[Math.PI/2, 0, 0]}>
+                <mesh castShadow>
+                     {/* Hexagonal-ish drum */}
+                    <cylinderGeometry args={[0.07, 0.07, 0.14, 6]} /> 
+                    <meshStandardMaterial color="#2d2d2d" metalness={0.6} />
+                </mesh>
+                {/* Detail rings on drum */}
+                 <mesh position={[0, -0.071, 0]}>
+                    <cylinderGeometry args={[0.072, 0.072, 0.01, 6]} />
+                    <meshStandardMaterial color="#111" />
+                </mesh>
+                 <mesh position={[0, 0.071, 0]}>
+                    <cylinderGeometry args={[0.072, 0.072, 0.01, 6]} />
+                    <meshStandardMaterial color="#111" />
+                </mesh>
+            </group>
+
+            {/* Barrel */}
+            <mesh position={[0, 0, 0.35]} rotation={[Math.PI/2, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.035, 0.035, 0.25]} />
+                <meshStandardMaterial color="#1a1a1a" />
+            </mesh>
+            
+            {/* Barrel Shroud / Handguard area */}
+            <mesh position={[0, 0, 0.3]} rotation={[Math.PI/2, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.045, 0.045, 0.1]} />
+                <meshStandardMaterial color="#222" />
+            </mesh>
+
+            {/* Vertical Foregrip */}
+             <mesh position={[0, -0.1, 0.38]} rotation={[0, 0, 0]} castShadow>
+                <cylinderGeometry args={[0.02, 0.02, 0.12]} />
+                <meshStandardMaterial color="#111" />
+            </mesh>
+
+            {/* Pistol Grip (Back) */}
+             <mesh position={[0, -0.08, -0.02]} rotation={[-0.3, 0, 0]} castShadow>
+                <boxGeometry args={[0.05, 0.14, 0.07]} />
+                <meshStandardMaterial color="#111" />
+            </mesh>
+
+            {/* Stock Structure (Connecting frame to buttpad) */}
+            {/* Upper strut */}
+             <mesh position={[0, 0.05, -0.2]} rotation={[-0.1, 0, 0]} castShadow>
+                <boxGeometry args={[0.03, 0.03, 0.3]} />
+                <meshStandardMaterial color="#1f1f1f" />
+            </mesh>
+             {/* Angled strut */}
+             <mesh position={[0, -0.02, -0.2]} rotation={[0.4, 0, 0]} castShadow>
+                <boxGeometry args={[0.025, 0.025, 0.25]} />
+                <meshStandardMaterial color="#1f1f1f" />
+            </mesh>
+            
+            {/* Stock Buttpad */}
+            <mesh position={[0, -0.05, -0.35]} castShadow>
+                <boxGeometry args={[0.04, 0.15, 0.02]} />
+                <meshStandardMaterial color="#111" />
+            </mesh>
+
+            {/* Reflex Sight */}
+            <group position={[0, 0.13, 0.1]}>
+                {/* Mount */}
+                 <mesh position={[0, -0.01, 0]}>
+                    <boxGeometry args={[0.04, 0.02, 0.08]} />
+                    <meshStandardMaterial color="#111" />
+                </mesh>
+                {/* Lens Frame */}
+                 <mesh position={[0, 0.025, 0]}>
+                    <boxGeometry args={[0.05, 0.05, 0.06]} />
+                    <meshStandardMaterial color="#222" />
+                </mesh>
+                 {/* Red Dot (Visual) */}
+                 <mesh position={[0, 0.025, -0.031]}>
+                    <planeGeometry args={[0.03, 0.03]} />
+                    <meshBasicMaterial color="#f00" />
+                </mesh>
+            </group>
+
+            <group position={[0, 0, 0.5]} ref={muzzleRef} />
+            <GunFlashlight position={[0.05, 0, 0.35]} />
+        </group>
+    )
+}
+
 // --- Main Character Component ---
 
 interface CharacterProps {
@@ -532,12 +774,17 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   const [projectiles, setProjectiles] = useState<ProjectileData[]>([]);
   const isMouseDown = useRef(false);
 
+  // Explosions
+  const [explosions, setExplosions] = useState<ExplosionData[]>([]);
+
   // Health & Money State
   const [health, setHealth] = useState(playerStats.maxHealth);
   const [money, setMoney] = useState(options.unlimitedCash ? 9999999 : 0);
   const lastHitTime = useRef(0);
   const [powerUps, setPowerUps] = useState<PowerUpData[]>([]);
   const [bones, setBones] = useState<BoneData[]>([]);
+  // Use a ref to track real-time bone positions including magnet movement
+  const bonePositionsRef = useRef<Record<string, Vector3>>({});
   
   // Leveling State
   const [level, setLevel] = useState(1);
@@ -574,6 +821,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   const gameStartTime = useRef(Date.now());
   const lastSpawnTime = useRef(0);
   const lastPowerUpTime = useRef(0);
+  const lastTimeUpdate = useRef(0);
 
   // Time handling for pause
   const isPausedRef = useRef(isPaused);
@@ -592,6 +840,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
         lastPowerUpTime.current += duration;
         lastHitTime.current += duration;
         lastShotTime.current += duration;
+        lastTimeUpdate.current += duration;
         setProjectiles(prev => prev.map(p => ({ ...p, createdAt: p.createdAt + duration })));
         setBones(prev => prev.map(b => ({ ...b, createdAt: b.createdAt + duration })));
     }
@@ -711,7 +960,13 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
     lastShotTime.current = now;
     setAmmo(prev => prev - 1);
 
-    const soundPath = weaponConfig.stance === 'TWO_HANDED' ? SOUND_PATHS.SHOTGUN : SOUND_PATHS.SHOOT;
+    let soundPath = SOUND_PATHS.SHOOT;
+    if (characterConfig.weapon === 'GRENADE_LAUNCHER') {
+        soundPath = SOUND_PATHS.MGL_FIRE;
+    } else if (weaponConfig.stance === 'TWO_HANDED') {
+        soundPath = SOUND_PATHS.SHOTGUN;
+    }
+    
     audioManager.playSFX(soundPath, 0.4);
 
     let spawnX = 0, spawnY = 0, spawnZ = 0;
@@ -726,29 +981,68 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
         spawnZ = group.current.position.z;
     }
 
-    const dirX = aimTarget.current.x - spawnX;
-    const dirZ = aimTarget.current.z - spawnZ;
-    const angle = Math.atan2(dirZ, dirX);
+    const targetX = aimTarget.current.x;
+    const targetZ = aimTarget.current.z;
 
     const pellets = weaponConfig.pelletCount || 1;
     const spread = weaponConfig.spread || 0;
 
     const newProjectiles: ProjectileData[] = [];
 
-    for(let i=0; i<pellets; i++) {
-        const spreadAngle = (Math.random() - 0.5) * spread; // Radians
-        const finalAngle = angle + spreadAngle;
-        const normX = Math.cos(finalAngle);
-        const normZ = Math.sin(finalAngle);
+    // --- Arcing Ballistics Calculation (for Grenade Launcher) ---
+    if (weaponConfig.arcing) {
+        const dist = Math.sqrt(Math.pow(targetX - spawnX, 2) + Math.pow(targetZ - spawnZ, 2));
+        const horizontalSpeed = weaponConfig.projectileSpeed;
+        const timeToTarget = dist / horizontalSpeed;
+        
+        // v = d / t
+        const vx = (targetX - spawnX) / timeToTarget;
+        const vz = (targetZ - spawnZ) / timeToTarget;
+        
+        // y = y0 + vy*t - 0.5*g*t^2
+        // We want y = 0 at time t
+        // 0 = spawnY + vy*t - 0.5*g*t^2
+        // vy*t = 0.5*g*t^2 - spawnY
+        // vy = 0.5*g*t - spawnY/t
+        const vy = (0.5 * GRAVITY * timeToTarget) - (spawnY / timeToTarget);
 
         newProjectiles.push({
             id: Math.random().toString(36),
             position: [spawnX, spawnY, spawnZ],
-            direction: [normX, 0, normZ], 
-            speed: weaponConfig.projectileSpeed,
-            damage: finalDamage, 
-            createdAt: now
+            direction: [0,0,0], // Unused for arcing
+            velocity: [vx, vy, vz],
+            speed: 0, // Unused for arcing
+            damage: finalDamage,
+            createdAt: now,
+            isExplosive: true,
+            explosionRadius: weaponConfig.explosionRadius,
+            usePhysics: true
         });
+
+    } else {
+        // --- Linear Calculation (Pistol, Shotgun, Uzi) ---
+        const dirX = targetX - spawnX;
+        const dirZ = targetZ - spawnZ;
+        const angle = Math.atan2(dirZ, dirX);
+
+        for(let i=0; i<pellets; i++) {
+            const spreadAngle = (Math.random() - 0.5) * spread; 
+            const finalAngle = angle + spreadAngle;
+            const normX = Math.cos(finalAngle);
+            const normZ = Math.sin(finalAngle);
+
+            newProjectiles.push({
+                id: Math.random().toString(36),
+                position: [spawnX, spawnY, spawnZ],
+                direction: [normX, 0, normZ], 
+                speed: weaponConfig.projectileSpeed,
+                damage: finalDamage, 
+                createdAt: now,
+                isExplosive: weaponConfig.explosive,
+                explosionRadius: weaponConfig.explosionRadius,
+                usePhysics: false
+            });
+        }
     }
 
     setProjectiles(prev => [...prev, ...newProjectiles]);
@@ -821,6 +1115,71 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   const removeProjectile = (id: string) => {
     setProjectiles(prev => prev.filter(p => p.id !== id));
   };
+
+  const handleExplosion = (position: Vector3, radius: number, damage: number) => {
+      // Create visual effect
+      setExplosions(prev => [...prev, {
+          id: Math.random().toString(36),
+          position: [position.x, position.y, position.z],
+          radius
+      }]);
+      
+      const sound = characterConfig.weapon === 'GRENADE_LAUNCHER' ? SOUND_PATHS.MGL_HIT : SOUND_PATHS.EXPLOSION;
+      audioManager.playSFX(sound, 0.6);
+
+      // Apply Splash Damage
+      setEnemies(prev => {
+         const newEnemies: EnemyData[] = [];
+         const dyingEnemies: EnemyData[] = [];
+
+         prev.forEach(e => {
+            if (!enemyPositionsRef.current[e.id]) {
+                newEnemies.push(e);
+                return;
+            }
+
+            const enemyPos = enemyPositionsRef.current[e.id];
+            const dx = enemyPos.x - position.x;
+            const dz = enemyPos.z - position.z;
+            const distSq = dx*dx + dz*dz;
+
+            if (distSq < radius * radius) {
+                // Damage Falloff? Let's stick to flat damage for simplicity or simple falloff
+                const remainingHp = e.currentHealth - damage;
+                if (remainingHp <= 0) {
+                    dyingEnemies.push(e);
+                } else {
+                    newEnemies.push({ ...e, currentHealth: remainingHp });
+                }
+            } else {
+                newEnemies.push(e);
+            }
+         });
+
+         // Process deaths
+         dyingEnemies.forEach(e => {
+            // Drop Bone
+            const pos = enemyPositionsRef.current[e.id] || new Vector3(...e.initialPosition);
+            setBones(b => [...b, {
+                id: Math.random().toString(36),
+                position: [pos.x, 0.2, pos.z],
+                value: BONE_EXP_VALUE,
+                createdAt: Date.now()
+            }]);
+
+            enemiesKilledRef.current += 1;
+            const earned = MONEY_PER_KILL;
+            moneyEarnedRef.current += earned;
+         });
+         
+         if (dyingEnemies.length > 0) {
+             setMoney(m => m + (dyingEnemies.length * MONEY_PER_KILL));
+             audioManager.playSFX(SOUND_PATHS.DEAD, 0.5);
+         }
+
+         return newEnemies;
+      });
+  }
 
   const handleHitEnemy = (enemyId: string) => {
     const targetEnemy = enemies.find(e => e.id === enemyId);
@@ -970,6 +1329,12 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
         shoot();
     }
 
+    if (now - lastTimeUpdate.current > 1000) {
+        const elapsed = now - gameStartTime.current;
+        uiEvents.dispatchEvent(new CustomEvent('timeUpdate', { detail: { time: elapsed } }));
+        lastTimeUpdate.current = now;
+    }
+
     // Spawning Logic
     if (now - lastSpawnTime.current > SPAWN_INTERVAL) {
         if (enemies.length < MAX_ENEMIES_CAP) {
@@ -1022,8 +1387,17 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
         const pickUpRange = PLAYER_RADIUS + BONE_RADIUS;
         let expGain = 0;
         const remainingBones = bones.filter(b => {
-            const dx = playerX - b.position[0];
-            const dz = playerZ - b.position[2];
+            let bPosX = b.position[0];
+            let bPosZ = b.position[2];
+
+            // Use ref position if available (handles magnet movement)
+            if (bonePositionsRef.current[b.id]) {
+                bPosX = bonePositionsRef.current[b.id].x;
+                bPosZ = bonePositionsRef.current[b.id].z;
+            }
+
+            const dx = playerX - bPosX;
+            const dz = playerZ - bPosZ;
             if (dx*dx + dz*dz < pickUpRange * pickUpRange) {
                 expGain += b.value;
                 return false;
@@ -1146,6 +1520,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   let CurrentWeaponModel = PistolModel;
   if (characterConfig.weapon === 'SHOTGUN') CurrentWeaponModel = ShotgunModel;
   if (characterConfig.weapon === 'UZI') CurrentWeaponModel = UziModel;
+  if (characterConfig.weapon === 'GRENADE_LAUNCHER') CurrentWeaponModel = GrenadeLauncherModel;
   
   const modelTransform = weaponConfig.holdConfig.model;
 
@@ -1310,8 +1685,23 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
             isPaused={isGameFrozen}
           />
       ))}
+      {explosions.map(ex => (
+          <ExplosionEffect 
+            key={ex.id} 
+            data={ex} 
+            onComplete={(id) => setExplosions(prev => prev.filter(e => e.id !== id))} 
+          />
+      ))}
       {powerUps.map(p => <HealthPack key={p.id} data={p} isPaused={isGameFrozen} />)}
-      {bones.map(b => <Bone key={b.id} data={b} isPaused={isGameFrozen} />)}
+      {bones.map(b => (
+          <Bone 
+            key={b.id} 
+            data={b} 
+            playerRef={group} 
+            bonePositionsRef={bonePositionsRef} 
+            isPaused={isGameFrozen} 
+          />
+      ))}
       {projectiles.map(p => (
         <Bullet 
             key={p.id} 
@@ -1319,6 +1709,7 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
             onDelete={removeProjectile} 
             enemyPositionsRef={enemyPositionsRef}
             onHitEnemy={handleHitEnemy}
+            onExplode={handleExplosion}
             isPaused={isGameFrozen}
         />
       ))}

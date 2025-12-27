@@ -22,6 +22,7 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
   const [isReloading, setIsReloading] = useState(false);
   const [wave, setWave] = useState(1);
   const [money, setMoney] = useState(0);
+  const [timeSurvived, setTimeSurvived] = useState(0);
 
   // Exp State
   const [exp, setExp] = useState(0);
@@ -68,6 +69,10 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
         setLevelUpOptions(e.detail.options);
     }
 
+    const handleTimeUpdate = (e: any) => {
+        setTimeSurvived(e.detail.time);
+    }
+
     uiEvents.addEventListener('ammoChange', handleAmmoUpdate);
     uiEvents.addEventListener('reloadState', handleReloading);
     uiEvents.addEventListener('healthChange', handleHealthUpdate);
@@ -75,6 +80,7 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
     uiEvents.addEventListener('moneyChange', handleMoneyUpdate);
     uiEvents.addEventListener('expChange', handleExpUpdate);
     uiEvents.addEventListener('showLevelUp', handleShowLevelUp);
+    uiEvents.addEventListener('timeUpdate', handleTimeUpdate);
 
     return () => {
       uiEvents.removeEventListener('ammoChange', handleAmmoUpdate);
@@ -84,6 +90,7 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
       uiEvents.removeEventListener('moneyChange', handleMoneyUpdate);
       uiEvents.removeEventListener('expChange', handleExpUpdate);
       uiEvents.removeEventListener('showLevelUp', handleShowLevelUp);
+      uiEvents.removeEventListener('timeUpdate', handleTimeUpdate);
     };
   }, []);
 
@@ -118,6 +125,13 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
       setLevelUpOptions(null);
       uiEvents.dispatchEvent(new CustomEvent('selectPerk', { detail: { perk } }));
   }
+
+  const formatTime = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const healthPercent = (health / currentMaxHealth) * 100;
   const expPercent = Math.min(100, (exp / maxExp) * 100);
@@ -236,7 +250,12 @@ export const UI: React.FC<UIProps> = ({ isPaused, onTogglePause, onQuit }) => {
         </div>
       </div>
 
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center gap-2">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none flex flex-col items-center gap-1">
+         {/* Stopwatch */}
+         <div className="font-mono font-black text-3xl text-white drop-shadow-md tracking-widest bg-black/20 px-4 rounded-sm backdrop-blur-sm border border-white/5 mb-1">
+            {formatTime(timeSurvived)}
+         </div>
+
          <div className="bg-gray-900/80 backdrop-blur-md px-6 py-2 rounded-full border border-green-900/50 text-white shadow-lg flex items-center gap-2">
             <span className="text-xl">💰</span>
             <span className="font-black font-mono text-2xl text-green-600">${money}</span>

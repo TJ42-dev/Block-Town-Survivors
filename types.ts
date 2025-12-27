@@ -46,16 +46,23 @@ export interface WeaponStats {
   pelletCount?: number; // For shotgun
   spread?: number; // Spread variance
   automatic: boolean; // Full auto fire
+  explosive?: boolean;
+  explosionRadius?: number;
+  arcing?: boolean; // New flag for grenade launcher physics
   holdConfig: WeaponHoldConfig;
 }
 
 export interface ProjectileData {
   id: string;
   position: [number, number, number];
-  direction: [number, number, number];
+  direction: [number, number, number]; // Used for linear
+  velocity?: [number, number, number]; // Used for physics/arcing
   speed: number;
   damage: number;
   createdAt: number;
+  isExplosive?: boolean;
+  explosionRadius?: number;
+  usePhysics?: boolean; // Toggle for gravity logic
 }
 
 export type EnemyType = 'ZOMBIE' | 'DEMON' | 'CROW';
