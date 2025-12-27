@@ -30,7 +30,25 @@ Ensure these files are configured correctly before deployment:
    };
    ```
 
-4. **public/sounds/** - All static audio assets must be in `public/` folder
+4. **public/sounds/** - All static audio assets must be in `public/` folder:
+   ```
+   public/
+   └── sounds/
+       ├── bgm/
+       │   ├── bgm1.mp3
+       │   └── bgm2.mp3
+       ├── pistol_fire.wav
+       ├── shotgun_fire.wav
+       ├── enemy_hit.wav
+       ├── enemy_dead.wav
+       ├── player_hit1.wav
+       ├── player_hit2.wav
+       ├── player_hit3.wav
+       ├── mgl_fire.wav
+       └── mgl_hit.wav
+   ```
+
+   **Important:** Do NOT put sounds in a root `sounds/` folder - they must be in `public/sounds/` for Vite to include them in the build.
 
 ### Workflow Setup
 Create `.github/workflows/deploy.yml`:
@@ -95,6 +113,7 @@ npm run build
 | **Build produces only 2 modules** | Missing `<script type="module" src="/index.tsx"></script>` in index.html |
 | **Black page / 404 on assets** | Check `base` path in vite.config.ts matches repo name |
 | **Sounds not loading** | Ensure sounds are in `public/sounds/` and paths use `import.meta.env.BASE_URL` |
+| **BGM 404 errors** | BGM files must be in `public/sounds/bgm/`, not root `sounds/bgm/` |
 | **Source files served instead of build** | GitHub Pages must point to `gh-pages` branch, not `main` |
 | **gh-pages branch not created** | Workflow only runs on push to configured branches - merge PR or add branch pattern |
 | **BGM not playing** | Ensure `audioManager.setMute(!options.soundEnabled)` is called before `playBGM()` in App.tsx |
