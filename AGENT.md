@@ -35,3 +35,4 @@ npm run build
 - **Black page / 404 on assets**: Check `base` path in vite.config.ts matches repo name
 - **Sounds not loading**: Ensure sounds are in `public/sounds/` and paths use BASE_URL
 - **Source files served instead of build**: GitHub Pages must point to `gh-pages` branch, not `main`
+- **BGM not playing**: Ensure `audioManager.setMute(!options.soundEnabled)` is called before `playBGM()` in App.tsx
