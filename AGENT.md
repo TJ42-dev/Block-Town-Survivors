@@ -117,3 +117,14 @@ npm run build
 | **Source files served instead of build** | GitHub Pages must point to `gh-pages` branch, not `main` |
 | **gh-pages branch not created** | Workflow only runs on push to configured branches - merge PR or add branch pattern |
 | **BGM not playing** | Ensure `audioManager.setMute(!options.soundEnabled)` is called before `playBGM()` in App.tsx |
+| **"Unable to decode audio data" errors** | Sound files corrupted during deployment. User must re-upload fresh WAV files to `public/sounds/` on the source branch (not gh-pages). See below. |
+
+### Post-Deployment: Fixing Corrupted Sound Files
+
+After initial deployment, WAV files in `gh-pages` may become corrupted (shows "EncodingError: Unable to decode audio data" in console).
+
+**To fix:**
+1. Get fresh copies of all WAV sound files
+2. Upload them to `public/sounds/` on the **source branch** (e.g., `main` or your PR branch)
+3. Commit and push - the workflow will rebuild and redeploy with working audio
+4. Do NOT manually upload to `gh-pages` branch - it gets overwritten on each deploy
