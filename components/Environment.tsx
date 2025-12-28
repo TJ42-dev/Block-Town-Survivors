@@ -406,7 +406,7 @@ const RedMoon: React.FC = () => {
         <meshBasicMaterial color="#ff4444" transparent opacity={0.1} />
       </mesh>
       {/* Moon light */}
-      <pointLight intensity={5} distance={200} color="#ff3333" decay={0.5} />
+      <pointLight intensity={3} distance={200} color="#ff3333" decay={0.5} />
     </group>
   );
 };
