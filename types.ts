@@ -5,6 +5,7 @@ export type Controls = {
   left: boolean;
   right: boolean;
   reload: boolean;
+  sprint: boolean;
 };
 
 export interface Position {

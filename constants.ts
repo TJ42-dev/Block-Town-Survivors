@@ -28,23 +28,25 @@ export const COLORS = {
 };
 
 // --- Audio Paths ---
+const BASE = import.meta.env.BASE_URL;
+
 export const SOUND_PATHS = {
   // BGM is now handled via BGM_TRACKS array
-  SHOOT: '/sounds/pistol_fire.wav',
-  SHOTGUN: '/sounds/shotgun_fire.wav',
-  EXPLOSION: '/sounds/shotgun_fire.wav', // Fallback
-  HIT: '/sounds/enemy_hit.wav',
-  DEAD: '/sounds/enemy_dead.wav',
-  PLAYER_HIT_1: '/sounds/player_hit1.wav',
-  PLAYER_HIT_2: '/sounds/player_hit2.wav',
-  PLAYER_HIT_3: '/sounds/player_hit3.wav',
-  MGL_FIRE: '/sounds/mgl_fire.wav',
-  MGL_HIT: '/sounds/mgl_hit.wav'
+  SHOOT: `${BASE}sounds/pistol_fire.wav`,
+  SHOTGUN: `${BASE}sounds/shotgun_fire.wav`,
+  EXPLOSION: `${BASE}sounds/shotgun_fire.wav`, // Fallback
+  HIT: `${BASE}sounds/enemy_hit.wav`,
+  DEAD: `${BASE}sounds/enemy_dead.wav`,
+  PLAYER_HIT_1: `${BASE}sounds/player_hit1.wav`,
+  PLAYER_HIT_2: `${BASE}sounds/player_hit2.wav`,
+  PLAYER_HIT_3: `${BASE}sounds/player_hit3.wav`,
+  MGL_FIRE: `${BASE}sounds/mgl_fire.wav`,
+  MGL_HIT: `${BASE}sounds/mgl_hit.wav`
 };
 
 export const BGM_TRACKS = [
-  '/sounds/bgm/bgm1.mp3',
-  '/sounds/bgm/bgm2.mp3'
+  `${BASE}sounds/bgm/bgm1.mp3`,
+  `${BASE}sounds/bgm/bgm2.mp3`
 ];
 
 // --- Player Stats ---
