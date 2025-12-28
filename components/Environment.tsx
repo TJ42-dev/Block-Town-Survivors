@@ -350,7 +350,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
       setEmissiveIntensity(newEmissive);
 
       if (lightRef.current) {
-        lightRef.current.intensity = newIntensity;
+        lightRef.current.intensity = newIntensity * 3; // Match the main light multiplier
       }
     }
   });
@@ -416,51 +416,92 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
           />
         </mesh>
       )}
-      {/* Main light - warm yellow with increased intensity */}
+      {/* Main light - warm yellow with high intensity and soft falloff */}
       {working && (
         <pointLight
           ref={lightRef}
           position={[0.8, 2.5, 0]}
-          intensity={intensity * 1.5}
-          distance={18}
-          decay={2}
+          intensity={intensity * 3}
+          distance={25}
+          decay={1.2}
           color="#ffcc88"
           castShadow
           shadow-mapSize-width={256}
           shadow-mapSize-height={256}
         />
       )}
-      {/* Secondary ambient glow - wider reach */}
+      {/* Secondary fill light - softer, wider reach */}
       {working && (
         <pointLight
           position={[0.8, 2.5, 0]}
-          intensity={intensity * 0.5}
-          distance={12}
-          decay={1.5}
-          color="#ff9966"
+          intensity={intensity * 1.5}
+          distance={20}
+          decay={1}
+          color="#ffaa77"
         />
       )}
-      {/* Ground light pool effect - larger and brighter */}
+      {/* Downward spotlight for focused ground illumination */}
       {working && (
-        <mesh position={[0.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[4, 24]} />
-          <meshBasicMaterial
-            color="#ffaa66"
-            transparent
-            opacity={0.12 * (intensity / 2.5)}
-          />
-        </mesh>
+        <spotLight
+          position={[0.8, 2.5, 0]}
+          angle={Math.PI / 3}
+          penumbra={1}
+          intensity={intensity * 2}
+          distance={15}
+          decay={1}
+          color="#ffddaa"
+          target-position={[0.8, 0, 0]}
+        />
       )}
-      {/* Additional subtle halo on ground */}
+      {/* Ground light pool - gradient rings for natural falloff */}
       {working && (
-        <mesh position={[0.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[6, 24]} />
-          <meshBasicMaterial
-            color="#ff8844"
-            transparent
-            opacity={0.04 * (intensity / 2.5)}
-          />
-        </mesh>
+        <>
+          {/* Core bright center */}
+          <mesh position={[0.8, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[1.5, 32]} />
+            <meshBasicMaterial
+              color="#ffcc88"
+              transparent
+              opacity={0.25 * (intensity / 2.5)}
+            />
+          </mesh>
+          {/* Ring 1 */}
+          <mesh position={[0.8, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[1.5, 3, 32]} />
+            <meshBasicMaterial
+              color="#ffbb77"
+              transparent
+              opacity={0.18 * (intensity / 2.5)}
+            />
+          </mesh>
+          {/* Ring 2 */}
+          <mesh position={[0.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[3, 5, 32]} />
+            <meshBasicMaterial
+              color="#ffaa66"
+              transparent
+              opacity={0.12 * (intensity / 2.5)}
+            />
+          </mesh>
+          {/* Ring 3 */}
+          <mesh position={[0.8, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[5, 7, 32]} />
+            <meshBasicMaterial
+              color="#ff9955"
+              transparent
+              opacity={0.07 * (intensity / 2.5)}
+            />
+          </mesh>
+          {/* Ring 4 - outer fade */}
+          <mesh position={[0.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[7, 10, 32]} />
+            <meshBasicMaterial
+              color="#ff8844"
+              transparent
+              opacity={0.03 * (intensity / 2.5)}
+            />
+          </mesh>
+        </>
       )}
     </group>
   );
