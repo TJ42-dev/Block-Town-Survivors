@@ -31,12 +31,12 @@ export const Game: React.FC<GameProps> = ({ onGameOver, options, playerStats, is
 
           {/* --- Lighting --- */}
           {/* Reddish ambient light - slightly brighter for visibility */}
-          <ambientLight intensity={0.4} color="#5a3030" />
+          <ambientLight intensity={0.3} color="#5a3030" />
 
           {/* Crimson Moonlight - main directional */}
           <directionalLight
             position={[-30, 40, -30]}
-            intensity={1.8}
+            intensity={1.5}
             color="#ff4444"
             castShadow
             shadow-mapSize-width={2048}
