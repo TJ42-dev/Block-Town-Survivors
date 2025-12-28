@@ -372,24 +372,57 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
         <boxGeometry args={[0.35, 0.15, 0.35]} />
         <meshStandardMaterial color="#222" roughness={0.8} />
       </mesh>
-      {/* Light bulb/lens */}
+      {/* Light bulb/lens - core */}
       <mesh position={[0.8, 2.7, 0]}>
         <sphereGeometry args={[0.12, 8, 8]} />
         <meshStandardMaterial
-          color={working ? '#ffddaa' : '#333'}
-          emissive={working ? '#ffaa66' : '#111'}
-          emissiveIntensity={emissiveIntensity}
+          color={working ? '#ffffee' : '#333'}
+          emissive={working ? '#ffcc88' : '#111'}
+          emissiveIntensity={emissiveIntensity * 2}
           transparent
-          opacity={working ? 0.9 : 0.5}
+          opacity={working ? 0.95 : 0.5}
         />
       </mesh>
-      {/* Main light - warm yellow with red tint */}
+      {/* Bloom glow layer 1 - inner */}
+      {working && (
+        <mesh position={[0.8, 2.7, 0]}>
+          <sphereGeometry args={[0.2, 12, 12]} />
+          <meshBasicMaterial
+            color="#ffcc66"
+            transparent
+            opacity={0.4 * (emissiveIntensity / 1.5)}
+          />
+        </mesh>
+      )}
+      {/* Bloom glow layer 2 - mid */}
+      {working && (
+        <mesh position={[0.8, 2.7, 0]}>
+          <sphereGeometry args={[0.35, 12, 12]} />
+          <meshBasicMaterial
+            color="#ffaa44"
+            transparent
+            opacity={0.2 * (emissiveIntensity / 1.5)}
+          />
+        </mesh>
+      )}
+      {/* Bloom glow layer 3 - outer */}
+      {working && (
+        <mesh position={[0.8, 2.7, 0]}>
+          <sphereGeometry args={[0.55, 12, 12]} />
+          <meshBasicMaterial
+            color="#ff8833"
+            transparent
+            opacity={0.1 * (emissiveIntensity / 1.5)}
+          />
+        </mesh>
+      )}
+      {/* Main light - warm yellow with increased intensity */}
       {working && (
         <pointLight
           ref={lightRef}
           position={[0.8, 2.5, 0]}
-          intensity={intensity}
-          distance={15}
+          intensity={intensity * 1.5}
+          distance={18}
           decay={2}
           color="#ffcc88"
           castShadow
@@ -397,24 +430,35 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
           shadow-mapSize-height={256}
         />
       )}
-      {/* Secondary ambient glow */}
+      {/* Secondary ambient glow - wider reach */}
       {working && (
         <pointLight
           position={[0.8, 2.5, 0]}
-          intensity={intensity * 0.3}
-          distance={8}
+          intensity={intensity * 0.5}
+          distance={12}
           decay={1.5}
-          color="#ff8866"
+          color="#ff9966"
         />
       )}
-      {/* Ground light pool effect */}
+      {/* Ground light pool effect - larger and brighter */}
       {working && (
         <mesh position={[0.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[3, 16]} />
+          <circleGeometry args={[4, 24]} />
           <meshBasicMaterial
             color="#ffaa66"
             transparent
-            opacity={0.08 * (intensity / 2.5)}
+            opacity={0.12 * (intensity / 2.5)}
+          />
+        </mesh>
+      )}
+      {/* Additional subtle halo on ground */}
+      {working && (
+        <mesh position={[0.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[6, 24]} />
+          <meshBasicMaterial
+            color="#ff8844"
+            transparent
+            opacity={0.04 * (intensity / 2.5)}
           />
         </mesh>
       )}

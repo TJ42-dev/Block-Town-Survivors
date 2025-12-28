@@ -336,27 +336,60 @@ export function generateMap(config: MapConfig): GeneratedMap {
     });
   }
 
-  // Generate street lamps along streets
+  // Generate street lamps along streets - more frequent placement
+  const lampSpacing = config.blockSize / 3; // Place lamps every third of a block
+
   for (let i = 0; i <= numBlocks; i++) {
     const streetPos = -halfWorld + i * config.blockSize;
 
-    // Lamps along vertical streets
-    for (let j = 1; j < numBlocks; j++) {
-      const lampZ = -halfWorld + j * config.blockSize - config.blockSize / 2;
+    // Lamps along vertical streets (more frequent)
+    for (let z = -halfWorld + lampSpacing; z < halfWorld; z += lampSpacing) {
+      // Skip if too close to intersections
+      const distToIntersection = Math.abs(z % config.blockSize);
+      if (distToIntersection < config.streetWidth * 1.5) continue;
 
-      if (rng.chance(0.7)) {
+      // Right side of street
+      if (rng.chance(0.85)) {
         streetLamps.push({
-          position: [streetPos + config.streetWidth + 0.5, 0, lampZ],
+          position: [streetPos + config.streetWidth + 0.5, 0, z],
           rotation: -Math.PI / 2,
-          working: rng.chance(0.3), // Most are broken
+          working: rng.chance(0.5), // 50% working
         });
       }
 
-      if (rng.chance(0.7)) {
+      // Left side of street
+      if (rng.chance(0.85)) {
         streetLamps.push({
-          position: [streetPos - 0.5, 0, lampZ],
+          position: [streetPos - 0.5, 0, z],
           rotation: Math.PI / 2,
-          working: rng.chance(0.3),
+          working: rng.chance(0.5),
+        });
+      }
+    }
+
+    // Lamps along horizontal streets
+    for (let x = -halfWorld + lampSpacing; x < halfWorld; x += lampSpacing) {
+      const streetZ = -halfWorld + i * config.blockSize;
+
+      // Skip if too close to intersections
+      const distToIntersection = Math.abs(x % config.blockSize);
+      if (distToIntersection < config.streetWidth * 1.5) continue;
+
+      // Top side of street
+      if (rng.chance(0.85)) {
+        streetLamps.push({
+          position: [x, 0, streetZ + config.streetWidth + 0.5],
+          rotation: Math.PI,
+          working: rng.chance(0.5),
+        });
+      }
+
+      // Bottom side of street
+      if (rng.chance(0.85)) {
+        streetLamps.push({
+          position: [x, 0, streetZ - 0.5],
+          rotation: 0,
+          working: rng.chance(0.5),
         });
       }
     }
