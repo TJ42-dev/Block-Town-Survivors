@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { COLORS } from '../constants';
 import { useMap } from '../contexts/MapContext';
-import { DEFAULT_MAP_CONFIG } from '../utils/mapGenerator';
 import type {
   GeneratedBuilding,
   GeneratedObstacle,
@@ -312,8 +313,47 @@ const Obstacle: React.FC<{ data: GeneratedObstacle }> = ({ data }) => {
 // STREET LAMP COMPONENT
 // ============================================
 
-const StreetLamp: React.FC<{ data: GeneratedStreetLamp }> = ({ data }) => {
+const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ data, index }) => {
   const { position, rotation, working } = data;
+  const lightRef = useRef<THREE.PointLight>(null);
+  const [intensity, setIntensity] = useState(working ? 2.5 : 0);
+  const [emissiveIntensity, setEmissiveIntensity] = useState(working ? 1.5 : 0.1);
+
+  // Determine if this lamp should flicker (roughly 30% of working lamps)
+  const shouldFlicker = working && (index % 3 === 0);
+  const flickerSpeed = useRef(2 + (index % 5) * 0.5); // Vary flicker speed
+  const flickerOffset = useRef(index * 1.7); // Phase offset
+
+  useFrame((state) => {
+    if (!working) return;
+
+    if (shouldFlicker) {
+      const time = state.clock.elapsedTime * flickerSpeed.current + flickerOffset.current;
+
+      // Create irregular flickering pattern
+      const flicker1 = Math.sin(time * 3.7) * 0.5 + 0.5;
+      const flicker2 = Math.sin(time * 7.3 + 1.3) * 0.5 + 0.5;
+      const flicker3 = Math.sin(time * 11.1 + 2.7) * 0.5 + 0.5;
+
+      // Combine for irregular pattern, occasionally going very dim
+      let flickerValue = (flicker1 * 0.5 + flicker2 * 0.3 + flicker3 * 0.2);
+
+      // Random chance to briefly go out
+      if (flicker1 < 0.1 && flicker2 < 0.3) {
+        flickerValue = 0.1;
+      }
+
+      const newIntensity = 1.0 + flickerValue * 2.0;
+      const newEmissive = 0.5 + flickerValue * 1.5;
+
+      setIntensity(newIntensity);
+      setEmissiveIntensity(newEmissive);
+
+      if (lightRef.current) {
+        lightRef.current.intensity = newIntensity;
+      }
+    }
+  });
 
   return (
     <group position={position} rotation={[0, rotation, 0]}>
@@ -327,18 +367,56 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp }> = ({ data }) => {
         <cylinderGeometry args={[0.04, 0.04, 0.8]} />
         <meshStandardMaterial color="#111" />
       </mesh>
-      {/* Lamp head */}
+      {/* Lamp housing */}
       <mesh position={[0.8, 2.8, 0]}>
-        <boxGeometry args={[0.3, 0.1, 0.3]} />
+        <boxGeometry args={[0.35, 0.15, 0.35]} />
+        <meshStandardMaterial color="#222" roughness={0.8} />
+      </mesh>
+      {/* Light bulb/lens */}
+      <mesh position={[0.8, 2.7, 0]}>
+        <sphereGeometry args={[0.12, 8, 8]} />
         <meshStandardMaterial
-          color="#333"
-          emissive={working ? '#ffaaaa' : '#222'}
-          emissiveIntensity={working ? 0.5 : 0.1}
+          color={working ? '#ffddaa' : '#333'}
+          emissive={working ? '#ffaa66' : '#111'}
+          emissiveIntensity={emissiveIntensity}
+          transparent
+          opacity={working ? 0.9 : 0.5}
         />
       </mesh>
-      {/* Light */}
+      {/* Main light - warm yellow with red tint */}
       {working && (
-        <pointLight position={[0.8, 2.6, 0]} intensity={0.8} distance={8} decay={2} color="#ffaaaa" />
+        <pointLight
+          ref={lightRef}
+          position={[0.8, 2.5, 0]}
+          intensity={intensity}
+          distance={15}
+          decay={2}
+          color="#ffcc88"
+          castShadow
+          shadow-mapSize-width={256}
+          shadow-mapSize-height={256}
+        />
+      )}
+      {/* Secondary ambient glow */}
+      {working && (
+        <pointLight
+          position={[0.8, 2.5, 0]}
+          intensity={intensity * 0.3}
+          distance={8}
+          decay={1.5}
+          color="#ff8866"
+        />
+      )}
+      {/* Ground light pool effect */}
+      {working && (
+        <mesh position={[0.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[3, 16]} />
+          <meshBasicMaterial
+            color="#ffaa66"
+            transparent
+            opacity={0.08 * (intensity / 2.5)}
+          />
+        </mesh>
       )}
     </group>
   );
@@ -376,7 +454,7 @@ const RedMoon: React.FC = () => {
 // ============================================
 
 export const Environment: React.FC = () => {
-  const { map } = useMap();
+  const { map, config } = useMap();
 
   return (
     <group>
@@ -385,7 +463,7 @@ export const Environment: React.FC = () => {
 
       {/* Ground Plane (Dead Grass/Dirt) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
-        <planeGeometry args={[DEFAULT_MAP_CONFIG.worldSize, DEFAULT_MAP_CONFIG.worldSize]} />
+        <planeGeometry args={[config.worldSize, config.worldSize]} />
         <meshStandardMaterial color={COLORS.grass} roughness={1} />
       </mesh>
 
@@ -426,7 +504,7 @@ export const Environment: React.FC = () => {
 
       {/* Street Lamps */}
       {map.streetLamps.map((lamp, i) => (
-        <StreetLamp key={`lamp-${i}`} data={lamp} />
+        <StreetLamp key={`lamp-${i}`} data={lamp} index={i} />
       ))}
     </group>
   );

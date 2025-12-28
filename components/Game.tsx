@@ -22,7 +22,7 @@ export const Game: React.FC<GameProps> = ({ onGameOver, options, playerStats, is
         camera={{ position: [8, 12, 8], fov: 40 }}
         dpr={[1, 2]}
       >
-        <MapProvider seed={12345}>
+        <MapProvider mapName="apocalypse_town">
           <Stats />
 
           {/* Red Moon Atmosphere */}

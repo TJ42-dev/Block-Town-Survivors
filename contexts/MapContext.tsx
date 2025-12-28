@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useMemo } from 'react';
-import { generateMap, DEFAULT_MAP_CONFIG, GeneratedMap, MapConfig } from '../utils/mapGenerator';
+import { generateMap, GeneratedMap, MapConfig } from '../utils/mapGenerator';
+import { getMapConfig, APOCALYPSE_TOWN } from '../configs/maps';
 
 interface MapContextValue {
   map: GeneratedMap;
   config: MapConfig;
+  mapName: string;
 }
 
 const MapContext = createContext<MapContextValue | null>(null);
@@ -17,16 +19,33 @@ export const useMap = (): MapContextValue => {
 };
 
 interface MapProviderProps {
+  /** Name of the map preset to use (from configs/maps.ts) */
+  mapName?: string;
+  /** Override seed for the map (optional) */
   seed?: number;
+  /** Or provide a complete custom config */
+  customConfig?: MapConfig;
   children: React.ReactNode;
 }
 
-export const MapProvider: React.FC<MapProviderProps> = ({ seed = 12345, children }) => {
-  const config = useMemo(() => ({ ...DEFAULT_MAP_CONFIG, seed }), [seed]);
+export const MapProvider: React.FC<MapProviderProps> = ({
+  mapName = 'apocalypse_town',
+  seed,
+  customConfig,
+  children
+}) => {
+  const config = useMemo(() => {
+    if (customConfig) {
+      return seed !== undefined ? { ...customConfig, seed } : customConfig;
+    }
+    const baseConfig = getMapConfig(mapName);
+    return seed !== undefined ? { ...baseConfig, seed } : baseConfig;
+  }, [mapName, seed, customConfig]);
+
   const map = useMemo(() => generateMap(config), [config]);
 
   return (
-    <MapContext.Provider value={{ map, config }}>
+    <MapContext.Provider value={{ map, config, mapName }}>
       {children}
     </MapContext.Provider>
   );
