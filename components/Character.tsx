@@ -276,6 +276,34 @@ const checkEnemyCollision = (
   return false;
 };
 
+// Constants for stuck/respawn detection
+const STUCK_THRESHOLD = 0.1; // Minimum distance to move per check
+const STUCK_TIME_LIMIT = 3000; // 3 seconds of being stuck triggers respawn
+const FAR_DISTANCE_SQ = 40 * 40; // 40 units away is "too far"
+const FAR_TIME_LIMIT = 5000; // 5 seconds too far triggers respawn
+const RESPAWN_MIN_DIST = 8; // Minimum distance from player for respawn
+const RESPAWN_MAX_DIST = 15; // Maximum distance from player for respawn
+
+// Find a valid respawn position near player
+const findRespawnPosition = (
+  playerPos: Vector3,
+  collisionData: ReturnType<typeof getCollisionData>
+): [number, number, number] => {
+  // Try multiple random positions around the player
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = RESPAWN_MIN_DIST + Math.random() * (RESPAWN_MAX_DIST - RESPAWN_MIN_DIST);
+    const x = playerPos.x + Math.cos(angle) * dist;
+    const z = playerPos.z + Math.sin(angle) * dist;
+
+    if (!checkEnemyCollision(x, z, collisionData, ENEMY_RADIUS + 0.5)) {
+      return [x, 0, z];
+    }
+  }
+  // Fallback: spawn at fixed offset from player
+  return [playerPos.x + RESPAWN_MIN_DIST, 0, playerPos.z];
+};
+
 const Enemy: React.FC<{
   data: EnemyData,
   playerRef: React.RefObject<Group | null>,
@@ -290,6 +318,10 @@ const Enemy: React.FC<{
   const [animationTime, setAnimationTime] = useState(Math.random() * 100);
   // Store last valid movement direction for steering persistence
   const lastSteerAngle = useRef(0);
+  // Stuck detection
+  const lastPosition = useRef(new Vector3(...data.initialPosition));
+  const stuckStartTime = useRef<number | null>(null);
+  const farStartTime = useRef<number | null>(null);
 
   useEffect(() => {
     if (!positionMapRef.current) positionMapRef.current = {};
@@ -303,15 +335,61 @@ const Enemy: React.FC<{
     if (isPaused || !group.current || !playerRef.current) return;
     const currentPos = group.current.position;
     const playerPos = playerRef.current.position;
+    const now = Date.now();
+
     ENEMY_DIR.subVectors(playerPos, currentPos);
     ENEMY_DIR.y = 0;
     const distSq = ENEMY_DIR.lengthSq();
     const attackRange = PLAYER_RADIUS + ENEMY_RADIUS + ENEMY_ATTACK_RANGE_BUFFER;
 
-    if (distSq < attackRange * attackRange) onHitPlayer();
-
-    // Flying enemies (CROW) don't need pathfinding
+    // --- Stuck/Far Detection and Respawn ---
     const isFlying = data.type === 'CROW';
+
+    if (!isFlying) {
+      // Check if stuck (not moving much)
+      const movedDist = currentPos.distanceTo(lastPosition.current);
+      if (movedDist < STUCK_THRESHOLD * delta * 60) {
+        // Barely moved this frame
+        if (stuckStartTime.current === null) {
+          stuckStartTime.current = now;
+        } else if (now - stuckStartTime.current > STUCK_TIME_LIMIT) {
+          // Been stuck too long - respawn
+          const newPos = findRespawnPosition(playerPos, collisionData);
+          group.current.position.set(newPos[0], newPos[1], newPos[2]);
+          lastPosition.current.copy(group.current.position);
+          stuckStartTime.current = null;
+          farStartTime.current = null;
+          lastSteerAngle.current = 0;
+          return;
+        }
+      } else {
+        stuckStartTime.current = null;
+      }
+
+      // Check if too far from player
+      if (distSq > FAR_DISTANCE_SQ) {
+        if (farStartTime.current === null) {
+          farStartTime.current = now;
+        } else if (now - farStartTime.current > FAR_TIME_LIMIT) {
+          // Been too far too long - respawn
+          const newPos = findRespawnPosition(playerPos, collisionData);
+          group.current.position.set(newPos[0], newPos[1], newPos[2]);
+          lastPosition.current.copy(group.current.position);
+          stuckStartTime.current = null;
+          farStartTime.current = null;
+          lastSteerAngle.current = 0;
+          return;
+        }
+      } else {
+        farStartTime.current = null;
+      }
+
+      // Update last position for next frame
+      lastPosition.current.copy(currentPos);
+    }
+
+    // --- Attack Check ---
+    if (distSq < attackRange * attackRange) onHitPlayer();
 
     if (distSq > 0.5) {
       ENEMY_DIR.normalize();
