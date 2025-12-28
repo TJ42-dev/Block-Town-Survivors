@@ -45,6 +45,8 @@ const UP_VEC = new Vector3(0, 1, 0);
 const MOVE_DIR = new Vector3();
 const PROJECTILE_POS = new Vector3();
 const ENEMY_DIR = new Vector3();
+const STEER_DIR = new Vector3();
+const TEST_POS = new Vector3();
 
 // --- Internal Components ---
 
@@ -246,17 +248,48 @@ const Bullet: React.FC<{
   );
 };
 
-const Enemy: React.FC<{ 
-  data: EnemyData, 
+// Helper to check if enemy position collides with obstacles
+const checkEnemyCollision = (
+  x: number,
+  z: number,
+  collisionData: ReturnType<typeof getCollisionData>,
+  enemyRadius: number = ENEMY_RADIUS
+): boolean => {
+  // Check buildings
+  for (const b of collisionData.buildings) {
+    const hw = b.size[0] / 2 + enemyRadius;
+    const hd = b.size[2] / 2 + enemyRadius;
+    if (x > b.position[0] - hw && x < b.position[0] + hw &&
+        z > b.position[2] - hd && z < b.position[2] + hd) {
+      return true;
+    }
+  }
+  // Check obstacles (cars, debris, etc.)
+  for (const obs of collisionData.obstacles) {
+    const dx = x - obs.position[0];
+    const dz = z - obs.position[2];
+    const r = (obs.radius || 0.5) + enemyRadius;
+    if (dx * dx + dz * dz < r * r) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const Enemy: React.FC<{
+  data: EnemyData,
   playerRef: React.RefObject<Group | null>,
   positionMapRef: React.MutableRefObject<EnemyPositionMap>,
   onHitPlayer: () => void,
-  isPaused: boolean
-}> = ({ data, playerRef, positionMapRef, onHitPlayer, isPaused }) => {
+  isPaused: boolean,
+  collisionData: ReturnType<typeof getCollisionData>
+}> = ({ data, playerRef, positionMapRef, onHitPlayer, isPaused, collisionData }) => {
   const group = useRef<Group>(null);
   const leftLimb = useRef<Group>(null);
   const rightLimb = useRef<Group>(null);
   const [animationTime, setAnimationTime] = useState(Math.random() * 100);
+  // Store last valid movement direction for steering persistence
+  const lastSteerAngle = useRef(0);
 
   useEffect(() => {
     if (!positionMapRef.current) positionMapRef.current = {};
@@ -273,14 +306,83 @@ const Enemy: React.FC<{
     ENEMY_DIR.subVectors(playerPos, currentPos);
     ENEMY_DIR.y = 0;
     const distSq = ENEMY_DIR.lengthSq();
-    const attackRange = PLAYER_RADIUS + ENEMY_RADIUS + ENEMY_ATTACK_RANGE_BUFFER; 
+    const attackRange = PLAYER_RADIUS + ENEMY_RADIUS + ENEMY_ATTACK_RANGE_BUFFER;
 
     if (distSq < attackRange * attackRange) onHitPlayer();
+
+    // Flying enemies (CROW) don't need pathfinding
+    const isFlying = data.type === 'CROW';
 
     if (distSq > 0.5) {
       ENEMY_DIR.normalize();
       const moveDist = data.speed * delta;
-      group.current.position.addScaledVector(ENEMY_DIR, moveDist);
+
+      // Flying enemies go straight to player
+      if (isFlying) {
+        group.current.position.addScaledVector(ENEMY_DIR, moveDist);
+      } else {
+        // Ground enemies need obstacle avoidance
+        const lookAhead = 1.5; // How far ahead to check for obstacles
+
+        // Test direct path first
+        TEST_POS.set(
+          currentPos.x + ENEMY_DIR.x * lookAhead,
+          0,
+          currentPos.z + ENEMY_DIR.z * lookAhead
+        );
+
+        let bestDir = ENEMY_DIR.clone();
+        let foundPath = !checkEnemyCollision(TEST_POS.x, TEST_POS.z, collisionData);
+
+        if (!foundPath) {
+          // Try steering around obstacle - check multiple angles
+          const baseAngle = Math.atan2(ENEMY_DIR.x, ENEMY_DIR.z);
+          // Prefer continuing in the same steer direction for smoother movement
+          const preferredSign = lastSteerAngle.current >= 0 ? 1 : -1;
+
+          for (let angleOffset = 0.3; angleOffset <= Math.PI; angleOffset += 0.3) {
+            // Try preferred direction first
+            for (const sign of [preferredSign, -preferredSign]) {
+              const testAngle = baseAngle + angleOffset * sign;
+              STEER_DIR.set(Math.sin(testAngle), 0, Math.cos(testAngle));
+
+              TEST_POS.set(
+                currentPos.x + STEER_DIR.x * lookAhead,
+                0,
+                currentPos.z + STEER_DIR.z * lookAhead
+              );
+
+              if (!checkEnemyCollision(TEST_POS.x, TEST_POS.z, collisionData)) {
+                bestDir.copy(STEER_DIR);
+                lastSteerAngle.current = angleOffset * sign;
+                foundPath = true;
+                break;
+              }
+            }
+            if (foundPath) break;
+          }
+
+          // If still no path, try to slide along the obstacle
+          if (!foundPath) {
+            // Reset steer angle when completely stuck
+            lastSteerAngle.current = 0;
+          }
+        } else {
+          // Gradually reset steer angle when path is clear
+          lastSteerAngle.current *= 0.9;
+        }
+
+        // Move in the best direction found
+        const nextX = currentPos.x + bestDir.x * moveDist;
+        const nextZ = currentPos.z + bestDir.z * moveDist;
+
+        // Only move if destination is valid
+        if (!checkEnemyCollision(nextX, nextZ, collisionData)) {
+          group.current.position.x = nextX;
+          group.current.position.z = nextZ;
+        }
+      }
+
       group.current.lookAt(playerPos.x, group.current.position.y, playerPos.z);
       
       const newTime = animationTime + delta * (data.type === 'CROW' ? 15 : 8);
@@ -1746,13 +1848,14 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
       </group>
 
       {enemies.map(enemy => (
-          <Enemy 
-            key={enemy.id} 
-            data={enemy} 
-            playerRef={group} 
+          <Enemy
+            key={enemy.id}
+            data={enemy}
+            playerRef={group}
             positionMapRef={enemyPositionsRef}
             onHitPlayer={handlePlayerHit}
             isPaused={isGameFrozen}
+            collisionData={collisionData}
           />
       ))}
       {explosions.map(ex => (
