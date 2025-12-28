@@ -4,16 +4,14 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Group, Vector3, MathUtils, Plane, Object3D } from 'three';
 import { useKeyboardControls } from '../hooks/useKeyboardControls';
 import { uiEvents } from './UI';
-import { 
-  COLORS, 
-  BUILDINGS, 
-  TREES, 
-  PLAYER_RADIUS, 
-  ENEMY_RADIUS, 
+import {
+  COLORS,
+  PLAYER_RADIUS,
+  ENEMY_RADIUS,
   TREE_COLLISION_RADIUS,
   WEAPONS,
   WEAPON_LEVEL_STATS,
-  CHARACTERS, 
+  CHARACTERS,
   PROJECTILE_TTL,
   ENEMY_DAMAGE,
   INVULNERABILITY_TIME,
@@ -36,6 +34,7 @@ import {
 } from '../constants';
 import { ProjectileData, EnemyData, PowerUpData, GameStats, GameOptions, PlayerStats, BoneData, PerkOption, CharacterConfig, EnemyType } from '../types';
 import { audioManager } from '../utils/audioManager';
+import { useMap, getCollisionData } from '../contexts/MapContext';
 
 // Pre-allocate math objects to reduce GC
 const AIM_PLANE = new Plane(new Vector3(0, 1, 0), -1.25);
@@ -95,8 +94,8 @@ const ExplosionEffect: React.FC<{ data: ExplosionData, onComplete: (id: string) 
     )
 }
 
-const Bullet: React.FC<{ 
-  data: ProjectileData, 
+const Bullet: React.FC<{
+  data: ProjectileData,
   onDelete: (id: string) => void,
   enemyPositionsRef: React.MutableRefObject<EnemyPositionMap>,
   onHitEnemy: (enemyId: string) => void,
@@ -104,7 +103,9 @@ const Bullet: React.FC<{
   isPaused: boolean
 }> = ({ data, onDelete, enemyPositionsRef, onHitEnemy, onExplode, isPaused }) => {
   const ref = useRef<Group>(null);
-  
+  const { map } = useMap();
+  const collisionData = useMemo(() => getCollisionData(map), [map]);
+
   // Physics State for this bullet
   const velocity = useRef(new Vector3(...(data.velocity || [0, 0, 0])));
   
@@ -157,15 +158,15 @@ const Bullet: React.FC<{
     // --- Collision Logic ---
 
     // Check Buildings (3D collision with height check)
-    for (const b of BUILDINGS) {
+    for (const b of collisionData.buildings) {
       const hw = b.size[0] / 2;
       const hd = b.size[2] / 2;
       const height = b.size[1];
 
       // If arcing, we can fly over buildings
-      if (ref.current.position.x > b.position[0] - hw && ref.current.position.x < b.position[0] + hw && 
+      if (ref.current.position.x > b.position[0] - hw && ref.current.position.x < b.position[0] + hw &&
           ref.current.position.z > b.position[2] - hd && ref.current.position.z < b.position[2] + hd) {
-          
+
           if (!data.usePhysics || ref.current.position.y < height) {
               hitEnvironment();
               return;
@@ -174,12 +175,26 @@ const Bullet: React.FC<{
     }
 
     // Check Trees (Cylindrical collision)
-    for (const tree of TREES) {
+    for (const tree of collisionData.trees) {
        const dx = ref.current.position.x - tree.position[0];
        const dz = ref.current.position.z - tree.position[2];
-       if (dx * dx + dz * dz < 0.25) { 
+       const r = tree.radius || 0.5;
+       if (dx * dx + dz * dz < r * r) {
            // Trees are roughly 2 units high
            if (!data.usePhysics || ref.current.position.y < 2) {
+                hitEnvironment();
+                return;
+           }
+       }
+    }
+
+    // Check Obstacles (cars, debris, etc.)
+    for (const obs of collisionData.obstacles) {
+       const dx = ref.current.position.x - obs.position[0];
+       const dz = ref.current.position.z - obs.position[2];
+       const r = obs.radius || 0.5;
+       if (dx * dx + dz * dz < r * r) {
+           if (!data.usePhysics || ref.current.position.y < 1.5) {
                 hitEnvironment();
                 return;
            }
@@ -735,7 +750,11 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   const group = useRef<Group>(null);
   const controls = useKeyboardControls();
   const { camera, gl } = useThree();
-  
+
+  // Get map data for collisions
+  const { map } = useMap();
+  const collisionData = useMemo(() => getCollisionData(map), [map]);
+
   // Resolve Character Config
   const characterConfig = useMemo(() => {
     return CHARACTERS[options.characterId] || CHARACTERS.TOM;
@@ -1074,11 +1093,21 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   }, [ammo, isReloading, projectiles, health, finalDamage, finalFireRate, enemies, isGameFrozen, weaponConfig]);
 
   const isPositionValid = (x: number, z: number) => {
-      for (const b of BUILDINGS) {
+      // Check buildings
+      for (const b of collisionData.buildings) {
         const hw = b.size[0] / 2 + 1;
         const hd = b.size[2] / 2 + 1;
-        if (x > b.position[0] - hw && x < b.position[0] + hw && 
+        if (x > b.position[0] - hw && x < b.position[0] + hw &&
             z > b.position[2] - hd && z < b.position[2] + hd) {
+          return false;
+        }
+      }
+      // Check obstacles
+      for (const obs of collisionData.obstacles) {
+        const dx = x - obs.position[0];
+        const dz = z - obs.position[2];
+        const r = (obs.radius || 0.5) + 1;
+        if (dx * dx + dz * dz < r * r) {
           return false;
         }
       }
@@ -1301,14 +1330,16 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   };
 
   const isColliding = (x: number, z: number): boolean => {
-    for (const tree of TREES) {
+    // Check trees
+    for (const tree of collisionData.trees) {
       const dx = x - tree.position[0];
       const dz = z - tree.position[2];
       const distSq = dx * dx + dz * dz;
-      const minDist = PLAYER_RADIUS + TREE_COLLISION_RADIUS;
+      const minDist = PLAYER_RADIUS + (tree.radius || TREE_COLLISION_RADIUS);
       if (distSq < minDist * minDist) return true;
     }
-    for (const b of BUILDINGS) {
+    // Check buildings
+    for (const b of collisionData.buildings) {
        const hw = b.size[0] / 2;
        const hd = b.size[2] / 2;
        const minX = b.position[0] - hw - PLAYER_RADIUS;
@@ -1316,6 +1347,14 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
        const minZ = b.position[2] - hd - PLAYER_RADIUS;
        const maxZ = b.position[2] + hd + PLAYER_RADIUS;
        if (x > minX && x < maxX && z > minZ && z < maxZ) return true;
+    }
+    // Check obstacles (cars, debris, etc.)
+    for (const obs of collisionData.obstacles) {
+      const dx = x - obs.position[0];
+      const dz = z - obs.position[2];
+      const distSq = dx * dx + dz * dz;
+      const minDist = PLAYER_RADIUS + (obs.radius || 0.5);
+      if (distSq < minDist * minDist) return true;
     }
     return false;
   };

@@ -4,6 +4,7 @@ import { Canvas } from '@react-three/fiber';
 import { Stats } from '@react-three/drei';
 import { Character } from './Character';
 import { Environment } from './Environment';
+import { MapProvider } from '../contexts/MapContext';
 import { GameOptions, GameStats, PlayerStats } from '../types';
 
 interface GameProps {
@@ -18,48 +19,52 @@ export const Game: React.FC<GameProps> = ({ onGameOver, options, playerStats, is
     <div className="w-full h-full relative">
       <Canvas
         shadows
-        camera={{ position: [8, 12, 8], fov: 40 }} // Initial camera
+        camera={{ position: [8, 12, 8], fov: 40 }}
         dpr={[1, 2]}
       >
-        <Stats />
-        
-        {/* Red Moon Atmosphere */}
-        <color attach="background" args={['#1a0505']} />
-        <fog attach="fog" args={['#1a0505', 15, 60]} />
+        <MapProvider seed={12345}>
+          <Stats />
 
-        {/* --- Lighting --- */}
-        {/* Reddish ambient light */}
-        <ambientLight intensity={0.4} color="#5c3a3a" />
-        
-        {/* Crimson Moonlight */}
-        <directionalLight
-          position={[-20, 30, -20]}
-          intensity={2.0}
-          color="#ff5555"
-          castShadow
-          shadow-mapSize-width={2048}
-          shadow-mapSize-height={2048}
-          shadow-camera-left={-40}
-          shadow-camera-right={40}
-          shadow-camera-top={40}
-          shadow-camera-bottom={-40}
-          shadow-bias={-0.0005}
-        />
-        
-        {/* Rim light for definition */}
-        <pointLight position={[10, 5, 10]} intensity={0.5} color="#4466ff" distance={20} />
+          {/* Red Moon Atmosphere */}
+          <color attach="background" args={['#0a0205']} />
+          <fog attach="fog" args={['#0a0205', 20, 80]} />
 
-        {/* --- World Content --- */}
-        <Environment />
-        
-        {/* --- Player --- */}
-        <Character 
-          onGameOver={onGameOver} 
-          options={options} 
-          playerStats={playerStats} 
-          isPaused={isPaused}
-        />
-        
+          {/* --- Lighting --- */}
+          {/* Dim reddish ambient light */}
+          <ambientLight intensity={0.25} color="#4a2525" />
+
+          {/* Crimson Moonlight - main directional */}
+          <directionalLight
+            position={[-30, 40, -30]}
+            intensity={1.5}
+            color="#ff4444"
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-left={-50}
+            shadow-camera-right={50}
+            shadow-camera-top={50}
+            shadow-camera-bottom={-50}
+            shadow-bias={-0.0005}
+          />
+
+          {/* Cold rim light for contrast */}
+          <pointLight position={[20, 8, 20]} intensity={0.3} color="#334466" distance={30} />
+
+          {/* Subtle ground bounce light */}
+          <hemisphereLight args={['#1a0505', '#000000', 0.2]} />
+
+          {/* --- World Content --- */}
+          <Environment />
+
+          {/* --- Player --- */}
+          <Character
+            onGameOver={onGameOver}
+            options={options}
+            playerStats={playerStats}
+            isPaused={isPaused}
+          />
+        </MapProvider>
       </Canvas>
     </div>
   );
