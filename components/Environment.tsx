@@ -375,8 +375,8 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
           ref={lightRef}
           position={[0.8, 2.5, 0]}
           intensity={intensity}
-          distance={75}
-          decay={1}
+          distance={50}
+          decay={1.25}
           color="#ffcc88"
         />
       )}
