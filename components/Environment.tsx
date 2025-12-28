@@ -316,42 +316,30 @@ const Obstacle: React.FC<{ data: GeneratedObstacle }> = ({ data }) => {
 const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ data, index }) => {
   const { position, rotation, working } = data;
   const lightRef = useRef<THREE.PointLight>(null);
-  const [intensity, setIntensity] = useState(working ? 2.5 : 0);
-  const [emissiveIntensity, setEmissiveIntensity] = useState(working ? 1.5 : 0.1);
+  const [intensity, setIntensity] = useState(working ? 2 : 0);
 
   // Determine if this lamp should flicker (roughly 30% of working lamps)
   const shouldFlicker = working && (index % 3 === 0);
-  const flickerSpeed = useRef(2 + (index % 5) * 0.5); // Vary flicker speed
-  const flickerOffset = useRef(index * 1.7); // Phase offset
+  const flickerSpeed = useRef(2 + (index % 5) * 0.5);
+  const flickerOffset = useRef(index * 1.7);
 
   useFrame((state) => {
-    if (!working) return;
+    if (!working || !shouldFlicker) return;
 
-    if (shouldFlicker) {
-      const time = state.clock.elapsedTime * flickerSpeed.current + flickerOffset.current;
+    const time = state.clock.elapsedTime * flickerSpeed.current + flickerOffset.current;
+    const flicker1 = Math.sin(time * 3.7) * 0.5 + 0.5;
+    const flicker2 = Math.sin(time * 7.3 + 1.3) * 0.5 + 0.5;
+    let flickerValue = flicker1 * 0.6 + flicker2 * 0.4;
 
-      // Create irregular flickering pattern
-      const flicker1 = Math.sin(time * 3.7) * 0.5 + 0.5;
-      const flicker2 = Math.sin(time * 7.3 + 1.3) * 0.5 + 0.5;
-      const flicker3 = Math.sin(time * 11.1 + 2.7) * 0.5 + 0.5;
+    if (flicker1 < 0.1 && flicker2 < 0.3) {
+      flickerValue = 0.1;
+    }
 
-      // Combine for irregular pattern, occasionally going very dim
-      let flickerValue = (flicker1 * 0.5 + flicker2 * 0.3 + flicker3 * 0.2);
+    const newIntensity = 1.0 + flickerValue * 1.5;
+    setIntensity(newIntensity);
 
-      // Random chance to briefly go out
-      if (flicker1 < 0.1 && flicker2 < 0.3) {
-        flickerValue = 0.1;
-      }
-
-      const newIntensity = 1.0 + flickerValue * 2.0;
-      const newEmissive = 0.5 + flickerValue * 1.5;
-
-      setIntensity(newIntensity);
-      setEmissiveIntensity(newEmissive);
-
-      if (lightRef.current) {
-        lightRef.current.intensity = newIntensity * 3; // Match the main light multiplier
-      }
+    if (lightRef.current) {
+      lightRef.current.intensity = newIntensity;
     }
   });
 
@@ -372,144 +360,25 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
         <boxGeometry args={[0.35, 0.15, 0.35]} />
         <meshStandardMaterial color="#222" roughness={0.8} />
       </mesh>
-      {/* Light bulb/lens - core */}
+      {/* Light bulb */}
       <mesh position={[0.8, 2.7, 0]}>
-        <sphereGeometry args={[0.12, 8, 8]} />
+        <sphereGeometry args={[0.1, 8, 8]} />
         <meshStandardMaterial
-          color={working ? '#ffffee' : '#333'}
-          emissive={working ? '#ffcc88' : '#111'}
-          emissiveIntensity={emissiveIntensity * 2}
-          transparent
-          opacity={working ? 0.95 : 0.5}
+          color={working ? '#ffeecc' : '#333'}
+          emissive={working ? '#ffaa44' : '#000'}
+          emissiveIntensity={working ? 2 : 0}
         />
       </mesh>
-      {/* Bloom glow layer 1 - inner */}
-      {working && (
-        <mesh position={[0.8, 2.7, 0]}>
-          <sphereGeometry args={[0.2, 12, 12]} />
-          <meshBasicMaterial
-            color="#ffcc66"
-            transparent
-            opacity={0.4 * (emissiveIntensity / 1.5)}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
-      {/* Bloom glow layer 2 - mid */}
-      {working && (
-        <mesh position={[0.8, 2.7, 0]}>
-          <sphereGeometry args={[0.35, 12, 12]} />
-          <meshBasicMaterial
-            color="#ffaa44"
-            transparent
-            opacity={0.2 * (emissiveIntensity / 1.5)}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
-      {/* Bloom glow layer 3 - outer */}
-      {working && (
-        <mesh position={[0.8, 2.7, 0]}>
-          <sphereGeometry args={[0.55, 12, 12]} />
-          <meshBasicMaterial
-            color="#ff8833"
-            transparent
-            opacity={0.1 * (emissiveIntensity / 1.5)}
-            depthWrite={false}
-          />
-        </mesh>
-      )}
-      {/* Main light - warm yellow with high intensity and soft falloff */}
+      {/* Point light */}
       {working && (
         <pointLight
           ref={lightRef}
           position={[0.8, 2.5, 0]}
-          intensity={intensity * 3}
-          distance={25}
-          decay={1.2}
-          color="#ffcc88"
-          castShadow
-          shadow-mapSize-width={256}
-          shadow-mapSize-height={256}
-        />
-      )}
-      {/* Secondary fill light - softer, wider reach */}
-      {working && (
-        <pointLight
-          position={[0.8, 2.5, 0]}
-          intensity={intensity * 1.5}
-          distance={20}
-          decay={1}
-          color="#ffaa77"
-        />
-      )}
-      {/* Downward spotlight for focused ground illumination */}
-      {working && (
-        <spotLight
-          position={[0.8, 2.5, 0]}
-          angle={Math.PI / 3}
-          penumbra={1}
-          intensity={intensity * 2}
+          intensity={intensity}
           distance={15}
-          decay={1}
-          color="#ffddaa"
-          target-position={[0.8, 0, 0]}
+          decay={2}
+          color="#ffcc88"
         />
-      )}
-      {/* Ground light pool - gradient rings for natural falloff */}
-      {working && (
-        <>
-          {/* Core bright center */}
-          <mesh position={[0.8, 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[1.5, 32]} />
-            <meshBasicMaterial
-              color="#ffcc88"
-              transparent
-              opacity={0.25 * (intensity / 2.5)}
-              depthWrite={false}
-            />
-          </mesh>
-          {/* Ring 1 */}
-          <mesh position={[0.8, 0.025, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[1.5, 3, 32]} />
-            <meshBasicMaterial
-              color="#ffbb77"
-              transparent
-              opacity={0.18 * (intensity / 2.5)}
-              depthWrite={false}
-            />
-          </mesh>
-          {/* Ring 2 */}
-          <mesh position={[0.8, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[3, 5, 32]} />
-            <meshBasicMaterial
-              color="#ffaa66"
-              transparent
-              opacity={0.12 * (intensity / 2.5)}
-              depthWrite={false}
-            />
-          </mesh>
-          {/* Ring 3 */}
-          <mesh position={[0.8, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[5, 7, 32]} />
-            <meshBasicMaterial
-              color="#ff9955"
-              transparent
-              opacity={0.07 * (intensity / 2.5)}
-              depthWrite={false}
-            />
-          </mesh>
-          {/* Ring 4 - outer fade */}
-          <mesh position={[0.8, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <ringGeometry args={[7, 10, 32]} />
-            <meshBasicMaterial
-              color="#ff8844"
-              transparent
-              opacity={0.03 * (intensity / 2.5)}
-              depthWrite={false}
-            />
-          </mesh>
-        </>
       )}
     </group>
   );
