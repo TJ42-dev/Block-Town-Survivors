@@ -391,6 +391,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
             color="#ffcc66"
             transparent
             opacity={0.4 * (emissiveIntensity / 1.5)}
+            depthWrite={false}
           />
         </mesh>
       )}
@@ -402,6 +403,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
             color="#ffaa44"
             transparent
             opacity={0.2 * (emissiveIntensity / 1.5)}
+            depthWrite={false}
           />
         </mesh>
       )}
@@ -413,6 +415,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
             color="#ff8833"
             transparent
             opacity={0.1 * (emissiveIntensity / 1.5)}
+            depthWrite={false}
           />
         </mesh>
       )}
@@ -463,6 +466,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
               color="#ffcc88"
               transparent
               opacity={0.25 * (intensity / 2.5)}
+              depthWrite={false}
             />
           </mesh>
           {/* Ring 1 */}
@@ -472,6 +476,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
               color="#ffbb77"
               transparent
               opacity={0.18 * (intensity / 2.5)}
+              depthWrite={false}
             />
           </mesh>
           {/* Ring 2 */}
@@ -481,6 +486,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
               color="#ffaa66"
               transparent
               opacity={0.12 * (intensity / 2.5)}
+              depthWrite={false}
             />
           </mesh>
           {/* Ring 3 */}
@@ -490,6 +496,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
               color="#ff9955"
               transparent
               opacity={0.07 * (intensity / 2.5)}
+              depthWrite={false}
             />
           </mesh>
           {/* Ring 4 - outer fade */}
@@ -499,6 +506,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
               color="#ff8844"
               transparent
               opacity={0.03 * (intensity / 2.5)}
+              depthWrite={false}
             />
           </mesh>
         </>
