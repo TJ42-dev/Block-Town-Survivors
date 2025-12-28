@@ -45,8 +45,6 @@ const UP_VEC = new Vector3(0, 1, 0);
 const MOVE_DIR = new Vector3();
 const PROJECTILE_POS = new Vector3();
 const ENEMY_DIR = new Vector3();
-const STEER_DIR = new Vector3();
-const TEST_POS = new Vector3();
 
 // --- Internal Components ---
 
@@ -248,80 +246,17 @@ const Bullet: React.FC<{
   );
 };
 
-// Helper to check if enemy position collides with obstacles
-const checkEnemyCollision = (
-  x: number,
-  z: number,
-  collisionData: ReturnType<typeof getCollisionData>,
-  enemyRadius: number = ENEMY_RADIUS
-): boolean => {
-  // Check buildings
-  for (const b of collisionData.buildings) {
-    const hw = b.size[0] / 2 + enemyRadius;
-    const hd = b.size[2] / 2 + enemyRadius;
-    if (x > b.position[0] - hw && x < b.position[0] + hw &&
-        z > b.position[2] - hd && z < b.position[2] + hd) {
-      return true;
-    }
-  }
-  // Check obstacles (cars, debris, etc.)
-  for (const obs of collisionData.obstacles) {
-    const dx = x - obs.position[0];
-    const dz = z - obs.position[2];
-    const r = (obs.radius || 0.5) + enemyRadius;
-    if (dx * dx + dz * dz < r * r) {
-      return true;
-    }
-  }
-  return false;
-};
-
-// Constants for stuck/respawn detection
-const STUCK_THRESHOLD = 0.1; // Minimum distance to move per check
-const STUCK_TIME_LIMIT = 3000; // 3 seconds of being stuck triggers respawn
-const FAR_DISTANCE_SQ = 40 * 40; // 40 units away is "too far"
-const FAR_TIME_LIMIT = 5000; // 5 seconds too far triggers respawn
-const RESPAWN_MIN_DIST = 8; // Minimum distance from player for respawn
-const RESPAWN_MAX_DIST = 15; // Maximum distance from player for respawn
-
-// Find a valid respawn position near player
-const findRespawnPosition = (
-  playerPos: Vector3,
-  collisionData: ReturnType<typeof getCollisionData>
-): [number, number, number] => {
-  // Try multiple random positions around the player
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const angle = Math.random() * Math.PI * 2;
-    const dist = RESPAWN_MIN_DIST + Math.random() * (RESPAWN_MAX_DIST - RESPAWN_MIN_DIST);
-    const x = playerPos.x + Math.cos(angle) * dist;
-    const z = playerPos.z + Math.sin(angle) * dist;
-
-    if (!checkEnemyCollision(x, z, collisionData, ENEMY_RADIUS + 0.5)) {
-      return [x, 0, z];
-    }
-  }
-  // Fallback: spawn at fixed offset from player
-  return [playerPos.x + RESPAWN_MIN_DIST, 0, playerPos.z];
-};
-
-const Enemy: React.FC<{
-  data: EnemyData,
+const Enemy: React.FC<{ 
+  data: EnemyData, 
   playerRef: React.RefObject<Group | null>,
   positionMapRef: React.MutableRefObject<EnemyPositionMap>,
   onHitPlayer: () => void,
-  isPaused: boolean,
-  collisionData: ReturnType<typeof getCollisionData>
-}> = ({ data, playerRef, positionMapRef, onHitPlayer, isPaused, collisionData }) => {
+  isPaused: boolean
+}> = ({ data, playerRef, positionMapRef, onHitPlayer, isPaused }) => {
   const group = useRef<Group>(null);
   const leftLimb = useRef<Group>(null);
   const rightLimb = useRef<Group>(null);
   const [animationTime, setAnimationTime] = useState(Math.random() * 100);
-  // Store last valid movement direction for steering persistence
-  const lastSteerAngle = useRef(0);
-  // Stuck detection
-  const lastPosition = useRef(new Vector3(...data.initialPosition));
-  const stuckStartTime = useRef<number | null>(null);
-  const farStartTime = useRef<number | null>(null);
 
   useEffect(() => {
     if (!positionMapRef.current) positionMapRef.current = {};
@@ -335,132 +270,17 @@ const Enemy: React.FC<{
     if (isPaused || !group.current || !playerRef.current) return;
     const currentPos = group.current.position;
     const playerPos = playerRef.current.position;
-    const now = Date.now();
-
     ENEMY_DIR.subVectors(playerPos, currentPos);
     ENEMY_DIR.y = 0;
     const distSq = ENEMY_DIR.lengthSq();
-    const attackRange = PLAYER_RADIUS + ENEMY_RADIUS + ENEMY_ATTACK_RANGE_BUFFER;
+    const attackRange = PLAYER_RADIUS + ENEMY_RADIUS + ENEMY_ATTACK_RANGE_BUFFER; 
 
-    // --- Stuck/Far Detection and Respawn ---
-    const isFlying = data.type === 'CROW';
-
-    if (!isFlying) {
-      // Check if stuck (not moving much)
-      const movedDist = currentPos.distanceTo(lastPosition.current);
-      if (movedDist < STUCK_THRESHOLD * delta * 60) {
-        // Barely moved this frame
-        if (stuckStartTime.current === null) {
-          stuckStartTime.current = now;
-        } else if (now - stuckStartTime.current > STUCK_TIME_LIMIT) {
-          // Been stuck too long - respawn
-          const newPos = findRespawnPosition(playerPos, collisionData);
-          group.current.position.set(newPos[0], newPos[1], newPos[2]);
-          lastPosition.current.copy(group.current.position);
-          stuckStartTime.current = null;
-          farStartTime.current = null;
-          lastSteerAngle.current = 0;
-          return;
-        }
-      } else {
-        stuckStartTime.current = null;
-      }
-
-      // Check if too far from player
-      if (distSq > FAR_DISTANCE_SQ) {
-        if (farStartTime.current === null) {
-          farStartTime.current = now;
-        } else if (now - farStartTime.current > FAR_TIME_LIMIT) {
-          // Been too far too long - respawn
-          const newPos = findRespawnPosition(playerPos, collisionData);
-          group.current.position.set(newPos[0], newPos[1], newPos[2]);
-          lastPosition.current.copy(group.current.position);
-          stuckStartTime.current = null;
-          farStartTime.current = null;
-          lastSteerAngle.current = 0;
-          return;
-        }
-      } else {
-        farStartTime.current = null;
-      }
-
-      // Update last position for next frame
-      lastPosition.current.copy(currentPos);
-    }
-
-    // --- Attack Check ---
     if (distSq < attackRange * attackRange) onHitPlayer();
 
     if (distSq > 0.5) {
       ENEMY_DIR.normalize();
       const moveDist = data.speed * delta;
-
-      // Flying enemies go straight to player
-      if (isFlying) {
-        group.current.position.addScaledVector(ENEMY_DIR, moveDist);
-      } else {
-        // Ground enemies need obstacle avoidance
-        const lookAhead = 1.5; // How far ahead to check for obstacles
-
-        // Test direct path first
-        TEST_POS.set(
-          currentPos.x + ENEMY_DIR.x * lookAhead,
-          0,
-          currentPos.z + ENEMY_DIR.z * lookAhead
-        );
-
-        let bestDir = ENEMY_DIR.clone();
-        let foundPath = !checkEnemyCollision(TEST_POS.x, TEST_POS.z, collisionData);
-
-        if (!foundPath) {
-          // Try steering around obstacle - check multiple angles
-          const baseAngle = Math.atan2(ENEMY_DIR.x, ENEMY_DIR.z);
-          // Prefer continuing in the same steer direction for smoother movement
-          const preferredSign = lastSteerAngle.current >= 0 ? 1 : -1;
-
-          for (let angleOffset = 0.3; angleOffset <= Math.PI; angleOffset += 0.3) {
-            // Try preferred direction first
-            for (const sign of [preferredSign, -preferredSign]) {
-              const testAngle = baseAngle + angleOffset * sign;
-              STEER_DIR.set(Math.sin(testAngle), 0, Math.cos(testAngle));
-
-              TEST_POS.set(
-                currentPos.x + STEER_DIR.x * lookAhead,
-                0,
-                currentPos.z + STEER_DIR.z * lookAhead
-              );
-
-              if (!checkEnemyCollision(TEST_POS.x, TEST_POS.z, collisionData)) {
-                bestDir.copy(STEER_DIR);
-                lastSteerAngle.current = angleOffset * sign;
-                foundPath = true;
-                break;
-              }
-            }
-            if (foundPath) break;
-          }
-
-          // If still no path, try to slide along the obstacle
-          if (!foundPath) {
-            // Reset steer angle when completely stuck
-            lastSteerAngle.current = 0;
-          }
-        } else {
-          // Gradually reset steer angle when path is clear
-          lastSteerAngle.current *= 0.9;
-        }
-
-        // Move in the best direction found
-        const nextX = currentPos.x + bestDir.x * moveDist;
-        const nextZ = currentPos.z + bestDir.z * moveDist;
-
-        // Only move if destination is valid
-        if (!checkEnemyCollision(nextX, nextZ, collisionData)) {
-          group.current.position.x = nextX;
-          group.current.position.z = nextZ;
-        }
-      }
-
+      group.current.position.addScaledVector(ENEMY_DIR, moveDist);
       group.current.lookAt(playerPos.x, group.current.position.y, playerPos.z);
       
       const newTime = animationTime + delta * (data.type === 'CROW' ? 15 : 8);
@@ -1926,14 +1746,13 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
       </group>
 
       {enemies.map(enemy => (
-          <Enemy
-            key={enemy.id}
-            data={enemy}
-            playerRef={group}
+          <Enemy 
+            key={enemy.id} 
+            data={enemy} 
+            playerRef={group} 
             positionMapRef={enemyPositionsRef}
             onHitPlayer={handlePlayerHit}
             isPaused={isGameFrozen}
-            collisionData={collisionData}
           />
       ))}
       {explosions.map(ex => (
