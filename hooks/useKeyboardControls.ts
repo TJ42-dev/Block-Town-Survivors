@@ -8,6 +8,7 @@ export const useKeyboardControls = (): Controls => {
     left: false,
     right: false,
     reload: false,
+    sprint: false,
   });
 
   useEffect(() => {
@@ -32,6 +33,9 @@ export const useKeyboardControls = (): Controls => {
         case 'KeyR':
           setMovement((m) => ({ ...m, reload: true }));
           break;
+        case 'ShiftLeft':
+          setMovement((m) => ({ ...m, sprint: true }));
+          break;
       }
     };
 
@@ -55,6 +59,9 @@ export const useKeyboardControls = (): Controls => {
           break;
         case 'KeyR':
           setMovement((m) => ({ ...m, reload: false }));
+          break;
+        case 'ShiftLeft':
+          setMovement((m) => ({ ...m, sprint: false }));
           break;
       }
     };

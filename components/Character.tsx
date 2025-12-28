@@ -810,7 +810,16 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
   const [currentExp, setCurrentExp] = useState(0);
   const [expToNextLevel, setExpToNextLevel] = useState(BASE_EXP_REQ);
   const [isLevelingUp, setIsLevelingUp] = useState(false);
-  
+
+  // Sprint State
+  const [isSprinting, setIsSprinting] = useState(false);
+  const sprintEndTime = useRef(0);
+  const sprintCooldownEnd = useRef(0);
+  const lastSprintPress = useRef(false);
+  const SPRINT_DURATION = 1000; // 1 second
+  const SPRINT_COOLDOWN = 5000; // 5 seconds
+  const SPRINT_MULTIPLIER = 2.5; // Speed boost during sprint
+
   // Run Modifiers (Perks)
   const [statModifiers, setStatModifiers] = useState({
       speed: 1.0,
@@ -1464,6 +1473,25 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
     const lookTargetZ = TARGET_VEC.z;
     group.current.lookAt(lookTargetX, group.current.position.y, lookTargetZ);
 
+    // Sprint Logic
+    const sprintNow = Date.now();
+
+    // Detect sprint key press (trigger on press, not hold)
+    if (controls.sprint && !lastSprintPress.current) {
+      // Check if cooldown has passed and not already sprinting
+      if (sprintNow >= sprintCooldownEnd.current && !isSprinting) {
+        setIsSprinting(true);
+        sprintEndTime.current = sprintNow + SPRINT_DURATION;
+        sprintCooldownEnd.current = sprintNow + SPRINT_DURATION + SPRINT_COOLDOWN;
+      }
+    }
+    lastSprintPress.current = controls.sprint;
+
+    // End sprint when duration expires
+    if (isSprinting && sprintNow >= sprintEndTime.current) {
+      setIsSprinting(false);
+    }
+
     // Movement
     MOVE_DIR.set(0, 0, 0);
     camera.getWorldDirection(CAM_FORWARD);
@@ -1479,9 +1507,12 @@ export const Character: React.FC<CharacterProps> = ({ onGameOver, options, playe
     if (MOVE_DIR.lengthSq() > 0) MOVE_DIR.normalize();
 
     const isMoving = MOVE_DIR.lengthSq() > 0.001;
-    
+
+    // Apply sprint speed multiplier
+    const currentSpeed = isSprinting ? effectiveSpeed * SPRINT_MULTIPLIER : effectiveSpeed;
+
     if (isMoving) {
-      const moveDistance = effectiveSpeed * delta;
+      const moveDistance = currentSpeed * delta;
       const currentX = group.current.position.x;
       const currentZ = group.current.position.z;
       const nextX = currentX + MOVE_DIR.x * moveDistance;
