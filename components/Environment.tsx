@@ -316,7 +316,7 @@ const Obstacle: React.FC<{ data: GeneratedObstacle }> = ({ data }) => {
 const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ data, index }) => {
   const { position, rotation, working } = data;
   const lightRef = useRef<THREE.PointLight>(null);
-  const [intensity, setIntensity] = useState(working ? 2 : 0);
+  const [intensity, setIntensity] = useState(working ? 5 : 0);
 
   // Determine if this lamp should flicker (roughly 30% of working lamps)
   const shouldFlicker = working && (index % 3 === 0);
@@ -335,7 +335,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
       flickerValue = 0.1;
     }
 
-    const newIntensity = 1.0 + flickerValue * 1.5;
+    const newIntensity = 3.0 + flickerValue * 3.0;
     setIntensity(newIntensity);
 
     if (lightRef.current) {
@@ -366,7 +366,7 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
         <meshStandardMaterial
           color={working ? '#ffeecc' : '#333'}
           emissive={working ? '#ffaa44' : '#000'}
-          emissiveIntensity={working ? 2 : 0}
+          emissiveIntensity={working ? 3 : 0}
         />
       </mesh>
       {/* Point light */}
@@ -375,8 +375,8 @@ const StreetLamp: React.FC<{ data: GeneratedStreetLamp; index: number }> = ({ da
           ref={lightRef}
           position={[0.8, 2.5, 0]}
           intensity={intensity}
-          distance={15}
-          decay={2}
+          distance={20}
+          decay={1.5}
           color="#ffcc88"
         />
       )}
